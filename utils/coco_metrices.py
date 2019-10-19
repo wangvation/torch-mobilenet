@@ -2,24 +2,24 @@
 from __future__ import absolute_import
 
 import sys
+import json
+import torch
 try:
   from StringIO import StringIO
 except ImportError:
   from io import StringIO
 import os
-from os import path as osp
 import warnings
 import numpy as np
-import mxnet as mx
-from ...data.mscoco.utils import try_import_pycocotools
+from pycocotools.cocoeval import COCOeval
 
 
-class COCODetectionMetric(mx.metric.EvalMetric):
+class COCODetectionMetric(object):
   """Detection metric for COCO bbox task.
 
   Parameters
   ----------
-  dataset : instance of gluoncv.data.COCODetection
+  dataset : instance of pycocotools.coco.COCO
     The validation dataset.
   save_prefix : str
     Prefix for the saved JSON results.
@@ -30,47 +30,21 @@ class COCODetectionMetric(mx.metric.EvalMetric):
   score_thresh : float
     Detection results with confident scores smaller than ``score_thresh`` will
     be discarded before saving to results.
-  data_shape : tuple of int, default is None
-    If `data_shape` is provided as (height, width),
-    we will rescale bounding boxes when saving the predictions.
-    This is helpful when SSD/YOLO box predictions cannot be rescaled
-    conveniently. Note that the data_shape must be fixed
-    for all validation images.
 
   """
 
-  def __init__(self, dataset, save_prefix, use_time=True,
-               cleanup=False, score_thresh=0.05,
-               data_shape=None):
-    super(COCODetectionMetric, self).__init__('COCOMeanAP')
+  def __init__(self,
+               dataset,
+               save_prefix,
+               cleanup=False,
+               score_thresh=0.05):
+    super(COCODetectionMetric, self).__init__()
     self.dataset = dataset
     self._img_ids = sorted(dataset.coco.getImgIds())
     self._current_id = 0
     self._cleanup = cleanup
     self._results = []
     self._score_thresh = score_thresh
-    if isinstance(data_shape, (tuple, list)):
-      assert len(data_shape) == 2, "Data shape must be (height, width)"
-    elif not data_shape:
-      data_shape = None
-    else:
-      raise ValueError(
-          "data_shape must be None or tuple of int as (height, width)")
-    self._data_shape = data_shape
-
-    if use_time:
-      import datetime
-      t = datetime.datetime.now().strftime('_%Y_%m_%d_%H_%M_%S')
-    else:
-      t = ''
-    self._filename = osp.abspath(osp.expanduser(save_prefix) + t + '.json')
-    try:
-      f = open(self._filename, 'w')
-    except IOError as e:
-      raise RuntimeError(
-          "Unable to open json file to dump. What(): {}".format(str(e)))
-    else:
-      f.close()
 
   def __del__(self):
     if self._cleanup:
@@ -95,7 +69,6 @@ class COCODetectionMetric(mx.metric.EvalMetric):
                             'category_id': 0,
                             'bbox': [0, 0, 0, 0],
                             'score': 0})
-    import json
     try:
       with open(self._filename, 'w') as f:
         json.dump(self._results, f)
@@ -105,9 +78,6 @@ class COCODetectionMetric(mx.metric.EvalMetric):
 
     pred = self.dataset.coco.loadRes(self._filename)
     gt = self.dataset.coco
-    # lazy import pycocotools
-    try_import_pycocotools()
-    from pycocotools.cocoeval import COCOeval
     coco_eval = COCOeval(gt, pred, 'bbox')
     coco_eval.evaluate()
     coco_eval.accumulate()
@@ -138,8 +108,7 @@ class COCODetectionMetric(mx.metric.EvalMetric):
     # precision has dims (iou, recall, cls, area range, max dets)
     # area range index 0: all area ranges
     # max dets index 2: 100 per image
-    precision = coco_eval.eval['precision'][ind_lo:(
-        ind_hi + 1), :, :, 0, 2]
+    precision = coco_eval.eval['precision'][ind_lo:(ind_hi + 1), :, :, 0, 2]
     ap_default = np.mean(precision[precision > -1])
     names, values = [], []
     names.append('~~~~ Summary metrics ~~~~\n')
@@ -151,8 +120,9 @@ class COCODetectionMetric(mx.metric.EvalMetric):
     sys.stdout = _stdout
     values.append(str(coco_summary).strip())
     for cls_ind, cls_name in enumerate(self.dataset.classes):
-      precision = coco_eval.eval['precision'][
-          ind_lo:(ind_hi + 1), :, cls_ind, 0, 2]
+      precision = coco_eval.eval['precision'][ind_lo:(ind_hi + 1),
+                                              :,
+                                              cls_ind, 0, 2]
       ap = np.mean(precision[precision > -1])
       names.append(cls_name)
       values.append('{:.1f}'.format(100 * ap))
@@ -170,20 +140,19 @@ class COCODetectionMetric(mx.metric.EvalMetric):
 
     Parameters
     ----------
-    pred_bboxes : mxnet.NDArray or numpy.ndarray
+    pred_bboxes : torch.Tensor or numpy.ndarray
         Prediction bounding boxes with shape `B, N, 4`.
         Where B is the size of mini-batch, N is the number of bboxes.
-    pred_labels : mxnet.NDArray or numpy.ndarray
+    pred_labels : torch.Tensor or numpy.ndarray
         Prediction bounding boxes labels with shape `B, N`.
-    pred_scores : mxnet.NDArray or numpy.ndarray
+    pred_scores : torch.Tensor or numpy.ndarray
         Prediction bounding boxes scores with shape `B, N`.
 
     """
     def as_numpy(a):
-      """Convert a (list of) mx.NDArray into numpy.ndarray"""
+      """Convert a (list of) torch.Tensor into numpy.ndarray"""
       if isinstance(a, (list, tuple)):
-        out = [x.asnumpy() if isinstance(
-            x, mx.nd.NDArray) else x for x in a]
+        out = [x.asnumpy() if isinstance(x, torch.Tensor) else x for x in a]
         return np.concatenate(out, axis=0)
       elif isinstance(a, mx.nd.NDArray):
         a = a.asnumpy()
@@ -198,14 +167,7 @@ class COCODetectionMetric(mx.metric.EvalMetric):
 
       imgid = self._img_ids[self._current_id]
       self._current_id += 1
-      if self._data_shape is not None:
-        entry = self.dataset.coco.loadImgs(imgid)[0]
-        orig_height = entry['height']
-        orig_width = entry['width']
-        height_scale = float(orig_height) / self._data_shape[0]
-        width_scale = float(orig_width) / self._data_shape[1]
-      else:
-        height_scale, width_scale = (1., 1.)
+      height_scale, width_scale = (1., 1.)
       # for each bbox detection in each image
       for bbox, label, score in zip(pred_bbox, pred_label, pred_score):
         if label not in self.dataset.contiguous_id_to_json:
