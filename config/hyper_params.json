@@ -1,0 +1,15 @@
+{
+  "epochs":1000,
+  "batch_size":64,
+  "dataset":"",
+  "checkpoint":"",
+  "log_dir":"",
+  "optimizer":{
+    "type":"SGD",
+    "lr":0.001,
+    "momentum":0.9,
+    "dampening":0,
+    "weight_decay":1e-5,
+    "nesterov":false
+  }
+}
