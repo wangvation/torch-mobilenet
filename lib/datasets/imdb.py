@@ -2,27 +2,35 @@
 # Fast R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
-# Written by Ross Girshick
+# Written by Ross Girshick and Xinlei Chen
 # --------------------------------------------------------
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import os
 import os.path as osp
 import PIL
-from utils.cython_bbox import bbox_overlaps
+from model.utils.cython_bbox import bbox_overlaps
 import numpy as np
 import scipy.sparse
-from fast_rcnn.config import cfg
+from model.utils.config import cfg
+import pdb
 
+ROOT_DIR = osp.join(osp.dirname(__file__), '..', '..')
 
 class imdb(object):
   """Image database."""
 
-  def __init__(self, name):
+  def __init__(self, name, classes=None):
     self._name = name
     self._num_classes = 0
-    self._classes = []
+    if not classes:
+      self._classes = []
+    else:
+      self._classes = classes
     self._image_index = []
-    self._obj_proposer = 'selective_search'
+    self._obj_proposer = 'gt'
     self._roidb = None
     self._roidb_handler = self.default_roidb
     # Use this dict for storing dataset specific config options
@@ -82,6 +90,9 @@ class imdb(object):
   def image_path_at(self, i):
     raise NotImplementedError
 
+  def image_id_at(self, i):
+    raise NotImplementedError
+
   def default_roidb(self):
     raise NotImplementedError
 
@@ -132,16 +143,16 @@ class imdb(object):
     # Return vector of overlap values
     areas = {'all': 0, 'small': 1, 'medium': 2, 'large': 3,
              '96-128': 4, '128-256': 5, '256-512': 6, '512-inf': 7}
-    area_ranges = [[0**2, 1e5**2],    # all
-                   [0**2, 32**2],     # small
-                   [32**2, 96**2],    # medium
-                   [96**2, 1e5**2],   # large
-                   [96**2, 128**2],   # 96-128
-                   [128**2, 256**2],  # 128-256
-                   [256**2, 512**2],  # 256-512
-                   [512**2, 1e5**2],  # 512-inf
+    area_ranges = [[0 ** 2, 1e5 ** 2],  # all
+                   [0 ** 2, 32 ** 2],  # small
+                   [32 ** 2, 96 ** 2],  # medium
+                   [96 ** 2, 1e5 ** 2],  # large
+                   [96 ** 2, 128 ** 2],  # 96-128
+                   [128 ** 2, 256 ** 2],  # 128-256
+                   [256 ** 2, 512 ** 2],  # 256-512
+                   [512 ** 2, 1e5 ** 2],  # 512-inf
                    ]
-    assert(area in areas, 'unknown area range: {}'.format(area))
+    assert area in areas, 'unknown area range: {}'.format(area)
     area_range = area_ranges[areas[area]]
     gt_overlaps = np.zeros(0)
     num_pos = 0
@@ -182,12 +193,12 @@ class imdb(object):
         # find which gt box is 'best' covered (i.e. 'best' = most iou)
         gt_ind = max_overlaps.argmax()
         gt_ovr = max_overlaps.max()
-        assert(gt_ovr >= 0)
+        assert (gt_ovr >= 0)
         # find the proposal box that covers the best covered gt box
         box_ind = argmax_overlaps[gt_ind]
         # record the iou coverage of this gt box
         _gt_overlaps[j] = overlaps[box_ind, gt_ind]
-        assert(_gt_overlaps[j] == gt_ovr)
+        assert (_gt_overlaps[j] == gt_ovr)
         # mark the proposal box and the gt box as used
         overlaps[box_ind, :] = -1
         overlaps[:, gt_ind] = -1
@@ -209,7 +220,7 @@ class imdb(object):
 
   def create_roidb_from_box_list(self, box_list, gt_roidb):
     assert len(box_list) == self.num_images, \
-        'Number of boxes must match number of ground-truth images'
+      'Number of boxes must match number of ground-truth images'
     roidb = []
     for i in range(self.num_images):
       boxes = box_list[i]
@@ -223,16 +234,16 @@ class imdb(object):
                                     gt_boxes.astype(np.float))
         argmaxes = gt_overlaps.argmax(axis=1)
         maxes = gt_overlaps.max(axis=1)
-        j = np.where(maxes > 0)[0]
-        overlaps[j, gt_classes[argmaxes[j]]] = maxes[j]
+        I = np.where(maxes > 0)[0]
+        overlaps[I, gt_classes[argmaxes[I]]] = maxes[I]
 
       overlaps = scipy.sparse.csr_matrix(overlaps)
       roidb.append({
-          'boxes': boxes,
-          'gt_classes': np.zeros((num_boxes,), dtype=np.int32),
-          'gt_overlaps': overlaps,
-          'flipped': False,
-          'seg_areas': np.zeros((num_boxes,), dtype=np.float32),
+        'boxes': boxes,
+        'gt_classes': np.zeros((num_boxes,), dtype=np.int32),
+        'gt_overlaps': overlaps,
+        'flipped': False,
+        'seg_areas': np.zeros((num_boxes,), dtype=np.float32),
       })
     return roidb
 

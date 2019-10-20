@@ -1,18 +1,17 @@
-# --------------------------------------------------------
-# Fast R-CNN
-# Copyright (c) 2015 Microsoft
-# Licensed under The MIT License [see LICENSE for details]
-# Written by Ross Girshick
-# --------------------------------------------------------
-
 """Transform a roidb into a trainable roidb by adding a bunch of metadata."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
+import os
+import pickle
+
+import datasets
 import numpy as np
-from fast_rcnn.config import cfg
-from fast_rcnn.bbox_transform import bbox_transform
-from utils.cython_bbox import bbox_overlaps
+from model.utils.config import cfg
+from datasets.factory import get_imdb
 import PIL
-
+import pdb
 
 def prepare_roidb(imdb):
   """Enrich the imdb's roidb by adding some derived quantities that
@@ -21,13 +20,28 @@ def prepare_roidb(imdb):
   each ground-truth box. The class with maximum overlap is also
   recorded.
   """
-  sizes = [PIL.Image.open(imdb.image_path_at(i)).size
-           for i in range(imdb.num_images)]
+
   roidb = imdb.roidb
+  if not (imdb.name.startswith('coco')):
+    cache_file = os.path.join(imdb.cache_path, imdb.name + '_sizes.pkl')
+    if os.path.exists(cache_file):
+      print('Image sizes loaded from %s' % cache_file)
+      with open(cache_file, 'rb') as f:
+        sizes = pickle.load(f)
+    else:
+      print('Extracting image sizes... (It may take long time)')
+      sizes = [PIL.Image.open(imdb.image_path_at(i)).size
+                for i in range(imdb.num_images)]
+      with open(cache_file, 'wb') as f:
+        pickle.dump(sizes, f)
+      print('Done!!')
+         
   for i in range(len(imdb.image_index)):
+    roidb[i]['img_id'] = imdb.image_id_at(i)
     roidb[i]['image'] = imdb.image_path_at(i)
-    roidb[i]['width'] = sizes[i][0]
-    roidb[i]['height'] = sizes[i][1]
+    if not (imdb.name.startswith('coco')):
+      roidb[i]['width'] = sizes[i][0]
+      roidb[i]['height'] = sizes[i][1]
     # need gt_overlaps as a dense array for argmax
     gt_overlaps = roidb[i]['gt_overlaps'].toarray()
     # max overlap with gt over classes (columns)
@@ -45,92 +59,87 @@ def prepare_roidb(imdb):
     assert all(max_classes[nonzero_inds] != 0)
 
 
-def add_bbox_regression_targets(roidb):
-  """Add information needed to train bounding-box regressors."""
-  assert len(roidb) > 0
-  assert 'max_classes' in roidb[0], 'Did you call prepare_roidb first?'
+def rank_roidb_ratio(roidb):
+    # rank roidb based on the ratio between width and height.
+    ratio_large = 2 # largest ratio to preserve.
+    ratio_small = 0.5 # smallest ratio to preserve.    
+    
+    ratio_list = []
+    for i in range(len(roidb)):
+      width = roidb[i]['width']
+      height = roidb[i]['height']
+      ratio = width / float(height)
 
-  num_images = len(roidb)
-  # Infer number of classes from the number of columns in gt_overlaps
-  num_classes = roidb[0]['gt_overlaps'].shape[1]
-  for im_i in range(num_images):
-    rois = roidb[im_i]['boxes']
-    max_overlaps = roidb[im_i]['max_overlaps']
-    max_classes = roidb[im_i]['max_classes']
-    roidb[im_i]['bbox_targets'] = \
-        _compute_targets(rois, max_overlaps, max_classes)
+      if ratio > ratio_large:
+        roidb[i]['need_crop'] = 1
+        ratio = ratio_large
+      elif ratio < ratio_small:
+        roidb[i]['need_crop'] = 1
+        ratio = ratio_small        
+      else:
+        roidb[i]['need_crop'] = 0
 
-  if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
-    # Use fixed / precomputed "means" and "stds" instead of empirical values
-    means = np.tile(
-        np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS), (num_classes, 1))
-    stds = np.tile(
-        np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS), (num_classes, 1))
+      ratio_list.append(ratio)
+
+    ratio_list = np.array(ratio_list)
+    ratio_index = np.argsort(ratio_list)
+    return ratio_list[ratio_index], ratio_index
+
+def filter_roidb(roidb):
+    # filter the image without bounding box.
+    print('before filtering, there are %d images...' % (len(roidb)))
+    i = 0
+    while i < len(roidb):
+      if len(roidb[i]['boxes']) == 0:
+        del roidb[i]
+        i -= 1
+      i += 1
+
+    print('after filtering, there are %d images...' % (len(roidb)))
+    return roidb
+
+def combined_roidb(imdb_names, training=True):
+  """
+  Combine multiple roidbs
+  """
+
+  def get_training_roidb(imdb):
+    """Returns a roidb (Region of Interest database) for use in training."""
+    if cfg.TRAIN.USE_FLIPPED:
+      print('Appending horizontally-flipped training examples...')
+      imdb.append_flipped_images()
+      print('done')
+
+    print('Preparing training data...')
+
+    prepare_roidb(imdb)
+    #ratio_index = rank_roidb_ratio(imdb)
+    print('done')
+
+    return imdb.roidb
+  
+  def get_roidb(imdb_name):
+    imdb = get_imdb(imdb_name)
+    print('Loaded dataset `{:s}`'.format(imdb.name))
+    imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
+    print('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))
+    roidb = get_training_roidb(imdb)
+    return roidb
+
+  roidbs = [get_roidb(s) for s in imdb_names.split('+')]
+  roidb = roidbs[0]
+
+  if len(roidbs) > 1:
+    for r in roidbs[1:]:
+      roidb.extend(r)
+    tmp = get_imdb(imdb_names.split('+')[1])
+    imdb = datasets.imdb.imdb(imdb_names, tmp.classes)
   else:
-    # Compute values needed for means and stds
-    # var(x) = E(x^2) - E(x)^2
-    class_counts = np.zeros((num_classes, 1)) + cfg.EPS
-    sums = np.zeros((num_classes, 4))
-    squared_sums = np.zeros((num_classes, 4))
-    for im_i in range(num_images):
-      targets = roidb[im_i]['bbox_targets']
-      for cls in range(1, num_classes):
-        cls_inds = np.where(targets[:, 0] == cls)[0]
-        if cls_inds.size > 0:
-          class_counts[cls] += cls_inds.size
-          sums[cls, :] += targets[cls_inds, 1:].sum(axis=0)
-          squared_sums[cls, :] += \
-              (targets[cls_inds, 1:] ** 2).sum(axis=0)
+    imdb = get_imdb(imdb_names)
 
-    means = sums / class_counts
-    stds = np.sqrt(squared_sums / class_counts - means ** 2)
+  if training:
+    roidb = filter_roidb(roidb)
 
-  print('bbox target means:')
-  print(means)
-  print(means[1:, :].mean(axis=0))  # ignore bg class
-  print('bbox target stdevs:')
-  print(stds)
-  print(stds[1:, :].mean(axis=0))  # ignore bg class
+  ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
-  # Normalize targets
-  if cfg.TRAIN.BBOX_NORMALIZE_TARGETS:
-    print("Normalizing targets")
-    for im_i in range(num_images):
-      targets = roidb[im_i]['bbox_targets']
-      for cls in range(1, num_classes):
-        cls_inds = np.where(targets[:, 0] == cls)[0]
-        roidb[im_i]['bbox_targets'][cls_inds, 1:] -= means[cls, :]
-        roidb[im_i]['bbox_targets'][cls_inds, 1:] /= stds[cls, :]
-  else:
-    print("NOT normalizing targets")
-
-  # These values will be needed for making predictions
-  # (the predicts will need to be unnormalized and uncentered)
-  return means.ravel(), stds.ravel()
-
-
-def _compute_targets(rois, overlaps, labels):
-  """Compute bounding-box regression targets for an image."""
-  # Indices of ground-truth ROIs
-  gt_inds = np.where(overlaps == 1)[0]
-  if len(gt_inds) == 0:
-    # Bail if the image has no ground-truth ROIs
-    return np.zeros((rois.shape[0], 5), dtype=np.float32)
-  # Indices of examples for which we try to make predictions
-  ex_inds = np.where(overlaps >= cfg.TRAIN.BBOX_THRESH)[0]
-
-  # Get IoU overlap between each ex ROI and gt ROI
-  ex_gt_overlaps = bbox_overlaps(
-      np.ascontiguousarray(rois[ex_inds, :], dtype=np.float),
-      np.ascontiguousarray(rois[gt_inds, :], dtype=np.float))
-
-  # Find which gt ROI each ex ROI has max overlap with:
-  # this will be the ex ROI's gt target
-  gt_assignment = ex_gt_overlaps.argmax(axis=1)
-  gt_rois = rois[gt_inds[gt_assignment], :]
-  ex_rois = rois[ex_inds, :]
-
-  targets = np.zeros((rois.shape[0], 5), dtype=np.float32)
-  targets[ex_inds, 0] = labels[ex_inds]
-  targets[ex_inds, 1:] = bbox_transform(ex_rois, gt_rois)
-  return targets
+  return imdb, roidb, ratio_list, ratio_index
