@@ -33,7 +33,7 @@ def find_in_path(name, path):
 #     Starts by looking for the CUDAHOME env variable. If not found, everything
 #     is based on finding 'nvcc' in the PATH.
 #     """
-# 
+#
 #     # first check if the CUDAHOME env variable is in use
 #     if 'CUDAHOME' in os.environ:
 #         home = os.environ['CUDAHOME']
@@ -114,8 +114,8 @@ class custom_build_ext(build_ext):
 
 ext_modules = [
     Extension(
-        "model.utils.cython_bbox",
-        ["model/utils/bbox.pyx"],
+        "utils.cython_bbox",
+        ["utils/bbox.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),

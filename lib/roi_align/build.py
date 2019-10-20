@@ -1,13 +1,13 @@
 from __future__ import print_function
 import os
 import torch
-from torch.utils.ffi import create_extension
+from setuptools import setup
+from torch.utils.cpp_extension import BuildExtension
+from torch.utils.cpp_extension import CUDAExtension
 
-sources = ['src/roi_align.c']
-headers = ['src/roi_align.h']
+sources = ['roi_align.cc']
+headers = ['roi_align.h']
 extra_objects = []
-#sources = []
-#headers = []
 defines = []
 with_cuda = False
 
@@ -15,24 +15,33 @@ this_file = os.path.dirname(os.path.realpath(__file__))
 print(this_file)
 
 if torch.cuda.is_available():
-    print('Including CUDA code.')
-    sources += ['src/roi_align_cuda.c']
-    headers += ['src/roi_align_cuda.h']
-    defines += [('WITH_CUDA', None)]
-    with_cuda = True
-    
-    extra_objects = ['src/roi_align_kernel.cu.o']
-    extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
+  print('Including CUDA code.')
+  sources += ['roi_align_cuda.cc']
+  headers += ['roi_align_cuda.h']
+  defines += [('WITH_CUDA', None)]
+  with_cuda = True
 
-ffi = create_extension(
-    '_ext.roi_align',
+  extra_objects = ['roi_align_kernel.cu.o']
+  extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
+
+cuda_ex = CUDAExtension(
+    name='_roi_align',
     headers=headers,
     sources=sources,
     define_macros=defines,
     relative_to=__file__,
     with_cuda=with_cuda,
-    extra_objects=extra_objects
+    extra_objects=extra_objects,
+    extra_compile_args={'cxx': ['-Wno-cpp',
+                                '-Wno-unused-function',
+                                '-std=c++11'],
+                        'nvcc': ['-O2']}
 )
 
 if __name__ == '__main__':
-    ffi.build()
+  setup(
+      name='roi_align',
+      ext_modules=[cuda_ex],
+      # inject our custom trigger
+      cmdclass={'build_ext': BuildExtension},
+  )
