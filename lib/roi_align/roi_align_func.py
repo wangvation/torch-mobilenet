@@ -1,4 +1,3 @@
-import torch
 from torch.autograd import Function
 import _roi_align as roi_align
 
@@ -25,13 +24,17 @@ class RoIAlignFunction(Function):
     if features.is_cuda:
       roi_align.roi_align_forward_cuda(self.aligned_height,
                                        self.aligned_width,
-                                       self.spatial_scale, features,
-                                       rois, output)
+                                       self.spatial_scale,
+                                       features,
+                                       rois,
+                                       output)
     else:
       roi_align.roi_align_forward(self.aligned_height,
                                   self.aligned_width,
-                                  self.spatial_scale, features,
-                                  rois, output)
+                                  self.spatial_scale,
+                                  features,
+                                  rois,
+                                  output)
 #            raise NotImplementedError
 
     return output
@@ -47,7 +50,8 @@ class RoIAlignFunction(Function):
                                       self.aligned_width,
                                       self.spatial_scale,
                                       grad_output,
-                                      self.rois, grad_input)
+                                      self.rois,
+                                      grad_input)
 
     # print grad_input
 
