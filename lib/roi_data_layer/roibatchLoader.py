@@ -10,9 +10,9 @@ import torch.utils.data as data
 from PIL import Image
 import torch
 
-from model.utils.config import cfg
-from roi_data_layer.minibatch import get_minibatch, get_minibatch
-from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
+from ..utils.config import cfg
+from ..roi_data_layer.minibatch import get_minibatch
+from ..rpn.bbox_transform import bbox_transform_inv, clip_boxes
 
 import numpy as np
 import random
@@ -21,7 +21,14 @@ import pdb
 
 
 class roibatchLoader(data.Dataset):
-  def __init__(self, roidb, ratio_list, ratio_index, batch_size, num_classes, training=True, normalize=None):
+  def __init__(self,
+               roidb,
+               ratio_list,
+               ratio_index,
+               batch_size,
+               num_classes,
+               training=True,
+               normalize=None):
     self._roidb = roidb
     self._num_classes = num_classes
     # we make the height of image consistent to trim_height, trim_width
@@ -50,7 +57,7 @@ class roibatchLoader(data.Dataset):
         target_ratio = ratio_list[right_idx]
       else:
         # for ratio cross 1, we make it to be 1.
-        target_ratio = 1
+        target_ratio = np.float64(1)
 
       # trainset ratio list ,each batch is same number
       self.ratio_list_batch[left_idx:(
@@ -79,7 +86,8 @@ class roibatchLoader(data.Dataset):
       # padding the input image to fixed size for each group #
       ########################################################
 
-      # NOTE1: need to cope with the case where a group cover both conditions. (done)
+      # NOTE1: need to cope with the case where
+      #  a group cover both conditions. (done)
       # NOTE2: need to consider the situation for the tail samples. (no worry)
       # NOTE3: need to implement a parallel data loader. (no worry)
       # get the index range
@@ -174,8 +182,9 @@ class roibatchLoader(data.Dataset):
       elif ratio > 1:
         # this means that data_width > data_height
         # if the image need to crop.
-        padding_data = torch.FloatTensor(data_height,
-                                         int(np.ceil(data_height * ratio)), 3).zero_()
+        padding_data = torch.FloatTensor(
+            data_height,
+            int(np.ceil(data_height * ratio)), 3).zero_()
         padding_data[:, :data_width, :] = data[0]
         im_info[0, 1] = padding_data.size(1)
       else:

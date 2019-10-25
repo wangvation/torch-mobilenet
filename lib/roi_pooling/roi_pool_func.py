@@ -1,6 +1,6 @@
 import torch
 from torch.autograd import Function
-import _roi_pooling as roi_pooling
+from . import _roi_pooling as roi_pooling
 import pdb
 
 

@@ -1,5 +1,6 @@
+import torch
 from torch.autograd import Function
-import _roi_align as roi_align
+from . import _roi_align as roi_align
 
 
 # TODO use save_for_backward instead
@@ -35,7 +36,6 @@ class RoIAlignFunction(Function):
                                   features,
                                   rois,
                                   output)
-#            raise NotImplementedError
 
     return output
 

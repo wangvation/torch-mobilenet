@@ -1,6 +1,6 @@
 from torch.nn.modules.module import Module
 from torch.nn.functional import avg_pool2d, max_pool2d
-from roi_align_func import RoIAlignFunction
+from .roi_align_func import RoIAlignFunction
 
 
 class RoIAlign(Module):

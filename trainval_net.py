@@ -24,22 +24,24 @@ import torch.nn as nn
 # import torchvision.transforms as transforms
 from torch.utils.data.sampler import Sampler
 
-from roi_data_layer.roidb import combined_roidb
-from roi_data_layer.roibatchLoader import roibatchLoader
-from model.utils.config import cfg
-from model.utils.config import cfg_from_file
-from model.utils.config import cfg_from_list
-# from model.utils.config import get_output_dir
+from lib.roi_data_layer.roidb import combined_roidb
+from lib.roi_data_layer.roibatchLoader import roibatchLoader
+from lib.utils.config import cfg
+from lib.utils.config import cfg_from_file
+from lib.utils.config import cfg_from_list
+# from lib.utils.config import get_output_dir
 
-# from model.utils.net_utils import weights_normal_init
-# from model.utils.net_utils import save_net
-# from model.utils.net_utils import load_net
-from model.utils.net_utils import adjust_learning_rate
-from model.utils.net_utils import save_checkpoint
-from model.utils.net_utils import clip_gradient
+# from lib.utils.net_utils import weights_normal_init
+# from lib.utils.net_utils import save_net
+# from lib.utils.net_utils import load_net
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
+from lib.utils.net_utils import adjust_learning_rate
+from lib.utils.net_utils import save_checkpoint
+from lib.utils.net_utils import clip_gradient
+
+from module.mobile_faster_rcnn import MobileFasterRCNN
+from module.mobilenet import MobileNetV2
+from module.mobilenet import MobileNetV1
 
 
 def parse_args():
@@ -51,8 +53,12 @@ def parse_args():
                       help='training dataset',
                       default='pascal_voc', type=str)
   parser.add_argument('--net', dest='net',
-                      help='vgg16, res101',
-                      default='vgg16', type=str)
+                      choices=['mobilenetv1_224_100',
+                               'mobilenetv1_224_075',
+                               'mobilenetv2_224_100',
+                               'mobilenetv2_224_075'],
+                      help='mobilenet type',
+                      default='mobilenetv1_224_100', type=str)
   parser.add_argument('--start_epoch', dest='start_epoch',
                       help='starting epoch',
                       default=1, type=int)
@@ -194,8 +200,10 @@ if __name__ == '__main__':
     args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]',
                      'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
 
-  args.cfg_file = "cfgs/{}_ls.yml".format(
-      args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
+  if args.large_scale:
+    args.cfg_file = "config/{}_ls.yml".format(args.net)
+  else:
+    args.cfg_file = "config/{}.yml".format(args.net)
 
   if args.cfg_file is not None:
     cfg_from_file(args.cfg_file)
@@ -228,7 +236,8 @@ if __name__ == '__main__':
 
   sampler_batch = sampler(train_size, args.batch_size)
 
-  dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size,
+  dataset = roibatchLoader(roidb, ratio_list,
+                           ratio_index, args.batch_size,
                            imdb.num_classes, training=True)
 
   dataloader = torch.utils.data.DataLoader(dataset,
@@ -259,28 +268,43 @@ if __name__ == '__main__':
     cfg.CUDA = True
 
   # initilize the network here.
-  if args.net == 'vgg16':
-    fasterRCNN = vgg16(imdb.classes, pretrained=True,
-                       class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    fasterRCNN = resnet(imdb.classes, 101, pretrained=True,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res50':
-    fasterRCNN = resnet(imdb.classes, 50, pretrained=True,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    fasterRCNN = resnet(imdb.classes, 152, pretrained=True,
-                        class_agnostic=args.class_agnostic)
+  if args.net == 'mobilenetv1_224_100':
+    dout_base_model = 1024
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv1_224_075':
+    dout_base_model = 1024
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
+  elif args.net == 'mobilenetv2_224_100':
+    dout_base_model = 1280
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv2_224_075':
+    dout_base_model = 1280
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
   else:
     print("network is not defined")
     pdb.set_trace()
 
+  fasterRCNN = MobileFasterRCNN(mobile_net=mobile_net,
+                                classes=imdb.classes,
+                                dout_base_model=dout_base_model,
+                                num_classes=imdb.num_classes,
+                                class_agnostic=args.class_agnostic)
   fasterRCNN.create_architecture()
 
   lr = cfg.TRAIN.LEARNING_RATE
   lr = args.lr
-  # tr_momentum = cfg.TRAIN.MOMENTUM
-  # tr_momentum = args.momentum
 
   params = []
   for key, value in dict(fasterRCNN.named_parameters()).items():
@@ -345,25 +369,32 @@ if __name__ == '__main__':
     data_iter = iter(dataloader)
     for step in range(iters_per_epoch):
       data = next(data_iter)
-      im_data.data.resize_(data[0].size()).copy_(data[0])
-      im_info.data.resize_(data[1].size()).copy_(data[1])
-      gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-      num_boxes.data.resize_(data[3].size()).copy_(data[3])
+
+      im_data.resize_(data[0].size())
+      im_info.resize_(data[1].size())
+      gt_boxes.resize_(data[2].size())
+      num_boxes.resize_(data[3].size())
+
+      with torch.no_grad():
+        im_data.data.copy_(data[0])
+        im_info.data.copy_(data[1])
+        gt_boxes.data.copy_(data[2])
+        num_boxes.data.copy_(data[3])
 
       fasterRCNN.zero_grad()
-      rois, cls_prob, bbox_pred, \
-          rpn_loss_cls, rpn_loss_box, \
-          RCNN_loss_cls, RCNN_loss_bbox, \
-          rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+      (rois, cls_prob, bbox_pred,
+       rpn_loss_cls, rpn_loss_box,
+       RCNN_loss_cls, RCNN_loss_bbox,
+       rois_label) = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-      loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
-          + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+      loss = (rpn_loss_cls.mean() + rpn_loss_box.mean() +
+              RCNN_loss_cls.mean() + RCNN_loss_bbox.mean())
       loss_temp += loss.item()
 
       # backward
       optimizer.zero_grad()
       loss.backward()
-      if args.net == "vgg16":
+      if args.net == "mobilenet":
         clip_gradient(fasterRCNN, 10.)
       optimizer.step()
 
@@ -408,9 +439,10 @@ if __name__ == '__main__':
         loss_temp = 0
         start = time.time()
 
-    save_name = os.path.join(
-        output_dir,
-        'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+    save_name = os.path.join(output_dir,
+                             'faster_rcnn_{}_{}_{}.pth'.format(args.session,
+                                                               epoch,
+                                                               step))
     save_checkpoint({
         'session': args.session,
         'epoch': epoch + 1,

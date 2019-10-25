@@ -12,6 +12,7 @@ import os
 import pickle
 import numpy as np
 
+
 def parse_rec(filename):
   """ Parse a PASCAL VOC xml file """
   tree = ET.parse(filename)
@@ -114,7 +115,7 @@ def voc_eval(detpath,
       recs[imagename] = parse_rec(annopath.format(imagename))
       if i % 100 == 0:
         print('Reading annotation for {:d}/{:d}'.format(
-          i + 1, len(imagenames)))
+            i + 1, len(imagenames)))
     # save
     print('Saving cached annotations to {:s}'.format(cachefile))
     with open(cachefile, 'wb') as f:

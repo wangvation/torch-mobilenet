@@ -5,7 +5,6 @@ from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension
 from torch.utils.cpp_extension import CUDAExtension
 
-
 sources = ['roi_crop.cc']
 headers = ['roi_crop.h']
 defines = []
@@ -25,15 +24,11 @@ extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 
 cuda_ex = CUDAExtension(
     '_roi_crop',
-    headers=headers,
     sources=sources,
     define_macros=defines,
-    relative_to=__file__,
-    with_cuda=with_cuda,
     extra_objects=extra_objects,
     extra_compile_args={'cxx': ['-Wno-cpp',
-                                '-Wno-unused-function',
-                                '-std=c++11'],
+                                '-Wno-unused-function'],
                         'nvcc': ['-O2']}
 )
 

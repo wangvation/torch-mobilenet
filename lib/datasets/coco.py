@@ -7,9 +7,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from datasets.imdb import imdb
-import datasets.ds_utils as ds_utils
-from model.utils.config import cfg
+from ..datasets.imdb import imdb
+from ..datasets import ds_utils as ds_utils
+from ..utils.config import cfg
 import os.path as osp
 import sys
 import os
@@ -20,9 +20,10 @@ import pickle
 import json
 import uuid
 # COCO API
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-from pycocotools import mask as COCOmask
+from ..pycocotools.coco import COCO
+from ..pycocotools.cocoeval import COCOeval
+from ..pycocotools import mask as COCOmask
+
 
 class coco(imdb):
   def __init__(self, image_set, year):
@@ -38,7 +39,8 @@ class coco(imdb):
     self._COCO = COCO(self._get_ann_file())
     cats = self._COCO.loadCats(self._COCO.getCatIds())
     self._classes = tuple(['__background__'] + [c['name'] for c in cats])
-    self._class_to_ind = dict(list(zip(self.classes, list(range(self.num_classes)))))
+    self._class_to_ind = dict(
+        list(zip(self.classes, list(range(self.num_classes)))))
     self._class_to_coco_cat_id = dict(list(zip([c['name'] for c in cats],
                                                self._COCO.getCatIds())))
     self._image_index = self._load_image_set_index()
@@ -50,12 +52,12 @@ class coco(imdb):
     # For example, minival2014 is a random 5000 image subset of val2014.
     # This mapping tells us where the view's images and proposals come from.
     self._view_map = {
-      'minival2014': 'val2014',  # 5k val2014 subset
-      'valminusminival2014': 'val2014',  # val2014 \setminus minival2014
-      'test-dev2015': 'test2015',
-      'valminuscapval2014': 'val2014',
-      'capval2014': 'val2014',
-      'captest2014': 'val2014'
+        'minival2014': 'val2014',  # 5k val2014 subset
+        'valminusminival2014': 'val2014',  # val2014 \setminus minival2014
+        'test-dev2015': 'test2015',
+        'valminuscapval2014': 'val2014',
+        'capval2014': 'val2014',
+        'captest2014': 'val2014'
     }
     coco_name = image_set + year  # e.g., "val2014"
     self._data_name = (self._view_map[coco_name]
@@ -67,7 +69,7 @@ class coco(imdb):
 
   def _get_ann_file(self):
     prefix = 'instances' if self._image_set.find('test') == -1 \
-      else 'image_info'
+        else 'image_info'
     return osp.join(self._data_path, 'annotations',
                     prefix + '_' + self._image_set + self._year + '.json')
 
@@ -101,12 +103,12 @@ class coco(imdb):
     """
     # Example image path for index=119993:
     #   images/train2014/COCO_train2014_000000119993.jpg
+    file_name = (str(index).zfill(12) + '.jpg')
     file_name = ('COCO_' + self._data_name + '_' +
                  str(index).zfill(12) + '.jpg')
-    image_path = osp.join(self._data_path, 'images',
-                          self._data_name, file_name)
-    assert osp.exists(image_path), \
-      'Path does not exist: {}'.format(image_path)
+    image_path = osp.join(self._data_path, self._data_name, file_name)
+
+    assert(osp.exists(image_path), 'Path does not exist: {}'.format(image_path))
     return image_path
 
   def gt_roidb(self):
@@ -235,7 +237,7 @@ class coco(imdb):
     # area range index 0: all area ranges
     # max dets index 2: 100 per image
     precision = \
-      coco_eval.eval['precision'][ind_lo:(ind_hi + 1), :, :, 0, 2]
+        coco_eval.eval['precision'][ind_lo:(ind_hi + 1), :, :, 0, 2]
     ap_default = np.mean(precision[precision > -1])
     print(('~~~~ Mean and per-category AP @ IoU=[{:.2f},{:.2f}] '
            '~~~~').format(IoU_lo_thresh, IoU_hi_thresh))
@@ -244,7 +246,8 @@ class coco(imdb):
       if cls == '__background__':
         continue
       # minus 1 because of __background__
-      precision = coco_eval.eval['precision'][ind_lo:(ind_hi + 1), :, cls_ind - 1, 0, 2]
+      precision = coco_eval.eval['precision'][ind_lo:(
+          ind_hi + 1), :, cls_ind - 1, 0, 2]
       ap = np.mean(precision[precision > -1])
       print('{:.1f}'.format(100 * ap))
 
@@ -276,10 +279,10 @@ class coco(imdb):
       ws = dets[:, 2] - xs + 1
       hs = dets[:, 3] - ys + 1
       results.extend(
-        [{'image_id': index,
-          'category_id': cat_id,
-          'bbox': [xs[k], ys[k], ws[k], hs[k]],
-          'score': scores[k]} for k in range(dets.shape[0])])
+          [{'image_id': index,
+            'category_id': cat_id,
+            'bbox': [xs[k], ys[k], ws[k], hs[k]],
+            'score': scores[k]} for k in range(dets.shape[0])])
     return results
 
   def _write_coco_results_file(self, all_boxes, res_file):

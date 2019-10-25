@@ -11,13 +11,14 @@ from __future__ import print_function
 import os
 import os.path as osp
 import PIL
-from model.utils.cython_bbox import bbox_overlaps
+from ..utils.cython_bbox import bbox_overlaps
 import numpy as np
 import scipy.sparse
-from model.utils.config import cfg
+from ..utils.config import cfg
 import pdb
 
 ROOT_DIR = osp.join(osp.dirname(__file__), '..', '..')
+
 
 class imdb(object):
   """Image database."""
@@ -220,7 +221,7 @@ class imdb(object):
 
   def create_roidb_from_box_list(self, box_list, gt_roidb):
     assert len(box_list) == self.num_images, \
-      'Number of boxes must match number of ground-truth images'
+        'Number of boxes must match number of ground-truth images'
     roidb = []
     for i in range(self.num_images):
       boxes = box_list[i]
@@ -239,11 +240,11 @@ class imdb(object):
 
       overlaps = scipy.sparse.csr_matrix(overlaps)
       roidb.append({
-        'boxes': boxes,
-        'gt_classes': np.zeros((num_boxes,), dtype=np.int32),
-        'gt_overlaps': overlaps,
-        'flipped': False,
-        'seg_areas': np.zeros((num_boxes,), dtype=np.float32),
+          'boxes': boxes,
+          'gt_classes': np.zeros((num_boxes,), dtype=np.int32),
+          'gt_overlaps': overlaps,
+          'flipped': False,
+          'seg_areas': np.zeros((num_boxes,), dtype=np.float32),
       })
     return roidb
 

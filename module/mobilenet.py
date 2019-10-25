@@ -30,11 +30,9 @@ from torch.nn import Conv2d
 from torch.nn import BatchNorm2d
 from torch.nn import AvgPool2d
 from torch.nn import Softmax2d
-from torch.nn import Linear
 from torch.nn import ReLU6
 from torch.nn.functional import relu6
 from torch.nn.functional import relu
-from torch.nn.functional import log_softmax
 
 
 def _make_divisible(v, divisor, min_value=None):
@@ -66,10 +64,10 @@ class DepthSepConv(nn.Module):
                ksize=3,
                stride=1,
                padding=1,
-               alpha=1):
+               multiplier=1):
     super(DepthSepConv, self).__init__()
-    in_channels = _make_divisible(in_channels * alpha, 8)
-    out_channels = _make_divisible(out_channels * alpha, 8)
+    in_channels = _make_divisible(in_channels * multiplier, 8)
+    out_channels = _make_divisible(out_channels * multiplier, 8)
     self.depthwise_conv = Conv2d(in_channels=in_channels,
                                  out_channels=in_channels,
                                  kernel_size=ksize,
@@ -135,37 +133,45 @@ class MobileNetV1(nn.Module):
 
   """
 
-  def __init__(self, resolution=224, num_classes=1000, alpha=1):
+  def __init__(self, resolution=224, num_classes=1000, multiplier=1):
 
     super(MobileNetV1, self).__init__()
-    self.name = "MobileNetV1_%d_%3d" % (resolution, int(alpha * 100))
+    self.name = "MobileNetV1_%d_%03d" % (resolution, int(multiplier * 100))
     assert(resolution % 32 == 0)
-    self.first_in_channel = _make_divisible(32 * alpha, 8)
-    self.last_out_channel = _make_divisible(1024 * alpha, 8)
-    self.net = nn.Sequential(
+    self.first_in_channel = _make_divisible(32 * multiplier, 8)
+    self.last_out_channel = _make_divisible(1024 * multiplier, 8)
+    self.features = nn.Sequential(
         Conv2d(3, self.first_in_channel, kernel_size=3, stride=2, padding=1),
-        DepthSepConv(32, 64, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(64, 128, ksize=3, stride=2, padding=1, alpha=alpha),
-        DepthSepConv(128, 128, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(128, 256, ksize=3, stride=2, padding=1, alpha=alpha),
-        DepthSepConv(256, 256, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(256, 512, ksize=3, stride=2, padding=1, alpha=alpha),
-        DepthSepConv(512, 512, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(512, 512, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(512, 512, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(512, 512, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(512, 512, ksize=3, stride=1, padding=1, alpha=alpha),
-        DepthSepConv(512, 1024, ksize=3, stride=2, padding=1, alpha=alpha),
-        DepthSepConv(1024, 1024, ksize=3, stride=1, padding=1, alpha=alpha),
-        AvgPool2d(kernel_size=resolution // 32, stride=1))
+        DepthSepConv(32, 64, stride=1, multiplier=multiplier),
+        DepthSepConv(64, 128, stride=2, multiplier=multiplier),
+        DepthSepConv(128, 128, stride=1, multiplier=multiplier),
+        DepthSepConv(128, 256, stride=2, multiplier=multiplier),
+        DepthSepConv(256, 256, stride=1, multiplier=multiplier),
+        DepthSepConv(256, 512, stride=2, multiplier=multiplier),
+        DepthSepConv(512, 512, stride=1, multiplier=multiplier),
+        DepthSepConv(512, 512, stride=1, multiplier=multiplier),
+        DepthSepConv(512, 512, stride=1, multiplier=multiplier),
+        DepthSepConv(512, 512, stride=1, multiplier=multiplier),
+        DepthSepConv(512, 512, stride=1, multiplier=multiplier),
+        DepthSepConv(512, 1024, stride=2, multiplier=multiplier),
+        DepthSepConv(1024, 1024, stride=1, multiplier=multiplier))
 
-    self.fc = Linear(self.last_out_channel, num_classes)
+    self._avgpool = AvgPool2d(kernel_size=resolution // 32, stride=1)
+
+    self.classifier = nn.Sequential(
+        # 1 x 1 x 1024
+        Conv2d(self.last_out_channel, num_classes, kernel_size=1),
+        # 1 x 1 x num_classes
+        Softmax2d()
+    )
 
   def forward(self, x):
-    x = self.net(x)
-    x = x.view(-1, self.last_out_channel)
-    x = self.fc(x)
-    return log_softmax(x, dim=1)
+
+    x = self.features(x)
+    x = self._avgpool(x)
+    x = self.classifier(x)
+    x = x.view(-1, self.num_classes)
+    return x
 
 
 class InvertedResblock(nn.Module):
@@ -251,13 +257,13 @@ class MobileNetV2(nn.Module):
     super(MobileNetV2, self).__init__()
 
     # build first layer
-    self.name = "MobileNetV2_%d_%3d" % (resolution, int(multiplier * 100))
+    self.name = "MobileNetV2_%d_%03d" % (resolution, int(multiplier * 100))
     first_in_channel = _make_divisible(32 * multiplier, 8)
     last_in_channel = _make_divisible(320 * multiplier, 8)
     last_out_channel = _make_divisible(1280 * multiplier, 8)
     last_ksize = resolution // 32
     self.num_classes = num_classes
-    self.net = nn.Sequential(
+    self.features = nn.Sequential(
         # 224x224x3
         Conv2d(3, first_in_channel, kernel_size=3, stride=2, padding=1),
         # 112 x 112 x 32
@@ -287,17 +293,21 @@ class MobileNetV2(nn.Module):
         InvertedResblock(160, 160, multiplier=multiplier),
         InvertedResblock(160, 320, multiplier=multiplier),
         # 7 x 7 x 320
-        Conv2d(last_in_channel, last_out_channel, kernel_size=1),
-        # 7 x 7 x 1280
+        Conv2d(last_in_channel, last_out_channel, kernel_size=1)
+    )
 
-        # Global Depthwise Convolution
-        # Conv2d(in_channels=last_out_channel,
-        #        out_channels=last_out_channel,
-        #        kernel_size=last_ksize,
-        #        groups=last_out_channel),
+    # Global Depthwise Convolution
+    # 7 x 7 x 1280
+    self.gdconv = Conv2d(in_channels=last_out_channel,
+                         out_channels=last_out_channel,
+                         kernel_size=last_ksize,
+                         groups=last_out_channel)
 
-        # Global Average Pooling
-        AvgPool2d(kernel_size=last_ksize),
+    # Global Average Pooling
+    # 7 x 7 x 1280
+    self._avgpool = AvgPool2d(kernel_size=last_ksize)
+
+    self.classifier = nn.Sequential(
         # 1 x 1 x 1280
         Conv2d(last_out_channel, num_classes, kernel_size=1),
         # 1 x 1 x num_classes
@@ -305,7 +315,9 @@ class MobileNetV2(nn.Module):
     )
 
   def forward(self, x):
-    x = self.net(x)
+    x = self.features(x)
+    x = self._avgpool(x)
+    x = self.classifier(x)
     x = x.view(-1, self.num_classes)
     return x
 

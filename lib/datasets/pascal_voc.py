@@ -27,7 +27,7 @@ from .voc_eval import voc_eval
 
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
-from model.utils.config import cfg
+from lib.utils.config import cfg
 
 try:
     xrange          # Python 2
@@ -237,7 +237,7 @@ class pascal_voc(imdb):
             y2 = float(bbox.find('ymax').text) - 1
 
             diffc = obj.find('difficult')
-            difficult = 0 if diffc == None else int(diffc.text)
+            difficult = 0 if diffc is None else int(diffc.text)
             ishards[ix] = difficult
 
             cls = self._class_to_ind[obj.find('name').text.lower().strip()]
@@ -263,7 +263,8 @@ class pascal_voc(imdb):
     def _get_voc_results_file_template(self):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
-        filedir = os.path.join(self._devkit_path, 'results', 'VOC' + self._year, 'Main')
+        filedir = os.path.join(self._devkit_path, 'results',
+                               'VOC' + self._year, 'Main')
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         path = os.path.join(filedir, filename)
@@ -371,6 +372,6 @@ class pascal_voc(imdb):
 if __name__ == '__main__':
     d = pascal_voc('trainval', '2007')
     res = d.roidb
-    from IPython import embed;
+    from IPython import embed
 
     embed()

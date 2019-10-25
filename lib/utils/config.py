@@ -187,12 +187,12 @@ __C.TEST.HAS_RPN = False
 # Test using these proposals
 __C.TEST.PROPOSAL_METHOD = 'gt'
 
-## NMS threshold used on RPN proposals
+# NMS threshold used on RPN proposals
 __C.TEST.RPN_NMS_THRESH = 0.7
-## Number of top scoring boxes to keep before apply NMS to RPN proposals
+# Number of top scoring boxes to keep before apply NMS to RPN proposals
 __C.TEST.RPN_PRE_NMS_TOP_N = 6000
 
-## Number of top scoring boxes to keep after applying NMS to RPN proposals
+# Number of top scoring boxes to keep after applying NMS to RPN proposals
 __C.TEST.RPN_POST_NMS_TOP_N = 300
 
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
@@ -263,7 +263,7 @@ __C.RNG_SEED = 3
 __C.EPS = 1e-14
 
 # Root directory of project
-__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..', '..'))
+__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
 
 # Data directory
 __C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
@@ -289,10 +289,10 @@ __C.POOLING_SIZE = 7
 __C.MAX_NUM_GT_BOXES = 20
 
 # Anchor scales for RPN
-__C.ANCHOR_SCALES = [8,16,32]
+__C.ANCHOR_SCALES = [8, 16, 32]
 
 # Anchor ratios for RPN
-__C.ANCHOR_RATIOS = [0.5,1,2]
+__C.ANCHOR_RATIOS = [0.5, 1, 2]
 
 # Feature stride for RPN
 __C.FEAT_STRIDE = [16, ]
@@ -302,6 +302,8 @@ __C.CUDA = False
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
 import pdb
+
+
 def get_output_dir(imdb, weights_filename):
   """Return the directory where experimental artifacts are placed.
   If the directory does not exist, it is created.
@@ -325,7 +327,8 @@ def get_output_tb_dir(imdb, weights_filename):
   A canonical path is built using the name from an imdb and a network
   (if not None).
   """
-  outdir = osp.abspath(osp.join(__C.ROOT_DIR, 'tensorboard', __C.EXP_DIR, imdb.name))
+  outdir = osp.abspath(
+      osp.join(__C.ROOT_DIR, 'tensorboard', __C.EXP_DIR, imdb.name))
   if weights_filename is None:
     weights_filename = 'default'
   outdir = osp.join(outdir, weights_filename)
@@ -394,6 +397,6 @@ def cfg_from_list(cfg_list):
       # handle the case when v is a string literal
       value = v
     assert type(value) == type(d[subkey]), \
-      'type {} does not match original type {}'.format(
+        'type {} does not match original type {}'.format(
         type(value), type(d[subkey]))
     d[subkey] = value

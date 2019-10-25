@@ -25,24 +25,25 @@ from torch.autograd import Variable
 import pickle
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
-from model.utils.config import cfg
-from model.utils.config import cfg_from_file
-from model.utils.config import cfg_from_list
-from model.utils.config import get_output_dir
-from model.rpn.bbox_transform import clip_boxes
-from model.nms.nms_wrapper import nms
-from model.rpn.bbox_transform import bbox_transform_inv
-# from model.utils.net_utils import save_net
-# from model.utils.net_utils import load_net
-from model.utils.net_utils import vis_detections
+from lib.utils.config import cfg
+from lib.utils.config import cfg_from_file
+from lib.utils.config import cfg_from_list
+from lib.utils.config import get_output_dir
+from lib.rpn.bbox_transform import clip_boxes
+from lib.nms.nms_wrapper import nms
+from lib.rpn.bbox_transform import bbox_transform_inv
+# from lib.utils.net_utils import save_net
+# from lib.utils.net_utils import load_net
+from lib.utils.net_utils import vis_detections
 
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
+from module.mobile_faster_rcnn import MobileFasterRCNN
+from module.mobilenet import MobileNetV2
+from module.mobilenet import MobileNetV1
 
 try:
-  xrange          # Python 2
+  range          # Python 2
 except NameError:
-  xrange = range  # Python 3
+  range = range  # Python 3
 
 
 def parse_args():
@@ -55,7 +56,7 @@ def parse_args():
                       default='pascal_voc', type=str)
   parser.add_argument('--cfg', dest='cfg_file',
                       help='optional config file',
-                      default='cfgs/vgg16.yml', type=str)
+                      default='config/vgg16.yml', type=str)
   parser.add_argument('--net', dest='net',
                       help='vgg16, res50, res101, res152',
                       default='res101', type=str)
@@ -139,8 +140,8 @@ if __name__ == '__main__':
     args.set_cfgs = ['ANCHOR_SCALES',
                      '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
 
-  args.cfg_file = "cfgs/{}_ls.yml".format(
-      args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
+  args.cfg_file = ("config/{}_ls.yml".format(args.net)
+                   if args.large_scale else "config/{}.yml".format(args.net))
 
   if args.cfg_file is not None:
     cfg_from_file(args.cfg_file)
@@ -167,22 +168,34 @@ if __name__ == '__main__':
                                                              args.checkpoint))
 
   # initilize the network here.
-  if args.net == 'vgg16':
-    fasterRCNN = vgg16(imdb.classes, pretrained=False,
-                       class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    fasterRCNN = resnet(imdb.classes, 101, pretrained=False,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res50':
-    fasterRCNN = resnet(imdb.classes, 50, pretrained=False,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    fasterRCNN = resnet(imdb.classes, 152, pretrained=False,
-                        class_agnostic=args.class_agnostic)
+  if args.net == 'mobilenetv1_224_100':
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv1_224_075':
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
+  elif args.net == 'mobilenetv2_224_100':
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv2_224_075':
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
   else:
     print("network is not defined")
     pdb.set_trace()
 
+  fasterRCNN = MobileFasterRCNN(mobile_net=mobile_net,
+                                classes=imdb.classes,
+                                num_classes=imdb.num_classes,
+                                class_agnostic=args.class_agnostic)
   fasterRCNN.create_architecture()
 
   print("load checkpoint %s" % (load_name))
@@ -229,8 +242,8 @@ if __name__ == '__main__':
 
   save_name = 'faster_rcnn_10'
   num_images = len(imdb.image_index)
-  all_boxes = [[[] for _ in xrange(num_images)]
-               for _ in xrange(imdb.num_classes)]
+  all_boxes = [[[] for _ in range(num_images)]
+               for _ in range(imdb.num_classes)]
 
   output_dir = get_output_dir(imdb, save_name)
   dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1,
@@ -300,7 +313,7 @@ if __name__ == '__main__':
     if vis:
       im = cv2.imread(imdb.image_path_at(i))
       im2show = np.copy(im)
-    for j in xrange(1, imdb.num_classes):
+    for j in range(1, imdb.num_classes):
       inds = torch.nonzero(scores[:, j] > thresh).view(-1)
       # if there is det
       if inds.numel() > 0:
@@ -326,10 +339,10 @@ if __name__ == '__main__':
     # Limit to max_per_image detections *over all classes*
     if max_per_image > 0:
       image_scores = np.hstack([all_boxes[j][i][:, -1]
-                                for j in xrange(1, imdb.num_classes)])
+                                for j in range(1, imdb.num_classes)])
       if len(image_scores) > max_per_image:
         image_thresh = np.sort(image_scores)[-max_per_image]
-        for j in xrange(1, imdb.num_classes):
+        for j in range(1, imdb.num_classes):
           keep = np.where(all_boxes[j][i][:, -1] >= image_thresh)[0]
           all_boxes[j][i] = all_boxes[j][i][keep, :]
 

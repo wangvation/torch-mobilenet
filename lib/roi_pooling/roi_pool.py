@@ -1,5 +1,5 @@
 from torch.nn.modules.module import Module
-from roi_pool_func import RoIPoolFunction
+from .roi_pool_func import RoIPoolFunction
 
 
 class _RoIPooling(Module):

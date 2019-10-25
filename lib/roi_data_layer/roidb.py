@@ -6,14 +6,15 @@ from __future__ import print_function
 import os
 import pickle
 
-import datasets
+from ..datasets.imdb import imdb
 import numpy as np
-from model.utils.config import cfg
-from datasets.factory import get_imdb
+from ..utils.config import cfg
+from ..datasets.factory import get_imdb
 import PIL
 import pdb
 
-def prepare_roidb(imdb):
+
+def prepare_roidb(imdb_obj):
   """Enrich the imdb's roidb by adding some derived quantities that
   are useful for training. This function precomputes the maximum
   overlap, taken over ground-truth boxes, between each ROI and
@@ -21,25 +22,25 @@ def prepare_roidb(imdb):
   recorded.
   """
 
-  roidb = imdb.roidb
-  if not (imdb.name.startswith('coco')):
-    cache_file = os.path.join(imdb.cache_path, imdb.name + '_sizes.pkl')
+  roidb = imdb_obj.roidb
+  if not (imdb_obj.name.startswith('coco')):
+    cache_file = os.path.join(imdb_obj.cache_path, imdb_obj.name + '_sizes.pkl')
     if os.path.exists(cache_file):
       print('Image sizes loaded from %s' % cache_file)
       with open(cache_file, 'rb') as f:
         sizes = pickle.load(f)
     else:
       print('Extracting image sizes... (It may take long time)')
-      sizes = [PIL.Image.open(imdb.image_path_at(i)).size
-                for i in range(imdb.num_images)]
+      sizes = [PIL.Image.open(imdb_obj.image_path_at(i)).size
+               for i in range(imdb_obj.num_images)]
       with open(cache_file, 'wb') as f:
         pickle.dump(sizes, f)
       print('Done!!')
-         
-  for i in range(len(imdb.image_index)):
-    roidb[i]['img_id'] = imdb.image_id_at(i)
-    roidb[i]['image'] = imdb.image_path_at(i)
-    if not (imdb.name.startswith('coco')):
+
+  for i in range(len(imdb_obj.image_index)):
+    roidb[i]['img_id'] = imdb_obj.image_id_at(i)
+    roidb[i]['image'] = imdb_obj.image_path_at(i)
+    if not (imdb_obj.name.startswith('coco')):
       roidb[i]['width'] = sizes[i][0]
       roidb[i]['height'] = sizes[i][1]
     # need gt_overlaps as a dense array for argmax
@@ -61,69 +62,71 @@ def prepare_roidb(imdb):
 
 def rank_roidb_ratio(roidb):
     # rank roidb based on the ratio between width and height.
-    ratio_large = 2 # largest ratio to preserve.
-    ratio_small = 0.5 # smallest ratio to preserve.    
-    
-    ratio_list = []
-    for i in range(len(roidb)):
-      width = roidb[i]['width']
-      height = roidb[i]['height']
-      ratio = width / float(height)
+  ratio_large = 2  # largest ratio to preserve.
+  ratio_small = 0.5  # smallest ratio to preserve.
 
-      if ratio > ratio_large:
-        roidb[i]['need_crop'] = 1
-        ratio = ratio_large
-      elif ratio < ratio_small:
-        roidb[i]['need_crop'] = 1
-        ratio = ratio_small        
-      else:
-        roidb[i]['need_crop'] = 0
+  ratio_list = []
+  for i in range(len(roidb)):
+    width = roidb[i]['width']
+    height = roidb[i]['height']
+    ratio = width / float(height)
 
-      ratio_list.append(ratio)
+    if ratio > ratio_large:
+      roidb[i]['need_crop'] = 1
+      ratio = ratio_large
+    elif ratio < ratio_small:
+      roidb[i]['need_crop'] = 1
+      ratio = ratio_small
+    else:
+      roidb[i]['need_crop'] = 0
 
-    ratio_list = np.array(ratio_list)
-    ratio_index = np.argsort(ratio_list)
-    return ratio_list[ratio_index], ratio_index
+    ratio_list.append(ratio)
+
+  ratio_list = np.array(ratio_list)
+  ratio_index = np.argsort(ratio_list)
+  return ratio_list[ratio_index], ratio_index
+
 
 def filter_roidb(roidb):
-    # filter the image without bounding box.
-    print('before filtering, there are %d images...' % (len(roidb)))
-    i = 0
-    while i < len(roidb):
-      if len(roidb[i]['boxes']) == 0:
-        del roidb[i]
-        i -= 1
-      i += 1
+  # filter the image without bounding box.
+  print('before filtering, there are %d images...' % (len(roidb)))
+  i = 0
+  while i < len(roidb):
+    if len(roidb[i]['boxes']) == 0:
+      del roidb[i]
+      i -= 1
+    i += 1
 
-    print('after filtering, there are %d images...' % (len(roidb)))
-    return roidb
+  print('after filtering, there are %d images...' % (len(roidb)))
+  return roidb
+
 
 def combined_roidb(imdb_names, training=True):
   """
   Combine multiple roidbs
   """
 
-  def get_training_roidb(imdb):
+  def get_training_roidb(imdb_obj):
     """Returns a roidb (Region of Interest database) for use in training."""
     if cfg.TRAIN.USE_FLIPPED:
       print('Appending horizontally-flipped training examples...')
-      imdb.append_flipped_images()
+      imdb_obj.append_flipped_images()
       print('done')
 
     print('Preparing training data...')
 
-    prepare_roidb(imdb)
-    #ratio_index = rank_roidb_ratio(imdb)
+    prepare_roidb(imdb_obj)
+    # ratio_index = rank_roidb_ratio(imdb)
     print('done')
 
-    return imdb.roidb
-  
+    return imdb_obj.roidb
+
   def get_roidb(imdb_name):
-    imdb = get_imdb(imdb_name)
-    print('Loaded dataset `{:s}`'.format(imdb.name))
-    imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
+    imdb_obj = get_imdb(imdb_name)
+    print('Loaded dataset `{:s}`'.format(imdb_obj.name))
+    imdb_obj.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
     print('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))
-    roidb = get_training_roidb(imdb)
+    roidb = get_training_roidb(imdb_obj)
     return roidb
 
   roidbs = [get_roidb(s) for s in imdb_names.split('+')]
@@ -133,13 +136,13 @@ def combined_roidb(imdb_names, training=True):
     for r in roidbs[1:]:
       roidb.extend(r)
     tmp = get_imdb(imdb_names.split('+')[1])
-    imdb = datasets.imdb.imdb(imdb_names, tmp.classes)
+    imdb_obj = imdb(imdb_names, tmp.classes)
   else:
-    imdb = get_imdb(imdb_names)
+    imdb_obj = get_imdb(imdb_names)
 
   if training:
     roidb = filter_roidb(roidb)
 
   ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
-  return imdb, roidb, ratio_list, ratio_index
+  return imdb_obj, roidb, ratio_list, ratio_index

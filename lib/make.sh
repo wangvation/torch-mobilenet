@@ -4,10 +4,8 @@
 
 export CUDA_PATH=/usr/local/cuda/
 #You may also want to ad the following
-#export C_INCLUDE_PATH=/opt/cuda/include
 
 export CXXFLAGS="-std=c++11"
-export CFLAGS="-std=c99"
 
 python3 setup.py build_ext --inplace
 rm -rf build
@@ -22,7 +20,7 @@ CUDA_ARCH="-gencode arch=compute_30,code=sm_30 \
 # compile NMS
 cd nms/
 echo "Compiling nms kernels by nvcc..."
-nvcc -c -o nms_cuda_kernel.cu.o nms_cuda_kernel.cu -x cu -Xcompiler -fPIC -arch=sm_52
+nvcc -c -o nms_cuda_kernel.cu.o nms_cuda_kernel.cu -x cu -Xcompiler -fPIC $CUDA_ARCH
 
 python3 build.py build_ext --inplace
 

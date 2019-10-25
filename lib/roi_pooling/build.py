@@ -26,11 +26,9 @@ if torch.cuda.is_available():
 
 cuda_ex = CUDAExtension(
     '_roi_pooling',
-    headers=headers,
     sources=sources,
     define_macros=defines,
-    relative_to=__file__,
-    with_cuda=with_cuda,
+    include_dirs=torch.utils.cpp_extension.include_paths(),
     extra_objects=extra_objects
 )
 

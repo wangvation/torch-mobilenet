@@ -1,8 +1,6 @@
 # functions/add.py
-import torch
 from torch.autograd import Function
-import _roi_align as roi_crop
-import pdb
+from . import _roi_crop as roi_crop
 
 
 class RoICropFunction(Function):

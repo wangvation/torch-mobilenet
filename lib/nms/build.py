@@ -1,5 +1,4 @@
 from __future__ import print_function
-import os
 import torch
 
 from setuptools import setup
@@ -20,20 +19,15 @@ if torch.cuda.is_available():
   defines += [('WITH_CUDA', None)]
   with_cuda = True
 
-this_file = os.path.dirname(os.path.realpath(__file__))
-print(this_file)
 extra_objects = ['nms_cuda_kernel.cu.o']
-extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 print(extra_objects)
 
 cuda_ex = CUDAExtension(
     '_nms',
-    headers=headers,
     sources=sources,
     define_macros=defines,
-    relative_to=__file__,
-    with_cuda=with_cuda,
     extra_objects=extra_objects,
+    include_dirs=torch.utils.cpp_extension.include_paths(),
     extra_compile_args={'cxx': ['-Wno-cpp',
                                 '-Wno-unused-function',
                                 '-std=c++11'],

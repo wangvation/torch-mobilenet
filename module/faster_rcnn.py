@@ -1,23 +1,15 @@
-import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import torchvision.models as models
-from torch.autograd import Variable
-import numpy as np
-from model.utils.config import cfg
-from model.rpn.rpn import _RPN
-from model.roi_pooling.modules.roi_pool import _RoIPooling
-from model.roi_crop.modules.roi_crop import _RoICrop
-from model.roi_align.modules.roi_align import RoIAlignAvg
-from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
-import time
-import pdb
-from model.utils.net_utils import _smooth_l1_loss
-from model.utils.net_utils import _crop_pool_layer
-from model.utils.net_utils import _affine_grid_gen
-from model.utils.net_utils import _affine_theta
+from lib.utils.config import cfg
+from lib.rpn.rpn import _RPN
+from lib.roi_pooling.roi_pool import _RoIPooling
+from lib.roi_crop.roi_crop import _RoICrop
+from lib.roi_align.roi_align import RoIAlignAvg
+from lib.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
+from lib.utils.net_utils import _smooth_l1_loss
+from lib.utils.net_utils import _affine_grid_gen
 
 
 class _fasterRCNN(nn.Module):
@@ -125,7 +117,8 @@ class _fasterRCNN(nn.Module):
     cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
     bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-    return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+    return (rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox,
+            RCNN_loss_cls, RCNN_loss_bbox, rois_label)
 
   def _init_weights(self):
     def normal_init(m, mean, stddev, truncated=False):

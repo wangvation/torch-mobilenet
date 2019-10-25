@@ -26,21 +26,17 @@ if torch.cuda.is_available():
 
 cuda_ex = CUDAExtension(
     name='_roi_align',
-    headers=headers,
     sources=sources,
     define_macros=defines,
-    relative_to=__file__,
-    with_cuda=with_cuda,
     extra_objects=extra_objects,
-    extra_compile_args={'cxx': ['-Wno-cpp',
-                                '-Wno-unused-function',
-                                '-std=c++11'],
+    include_dirs=torch.utils.cpp_extension.include_paths(),
+    extra_compile_args={'cxx': ['-g'],
                         'nvcc': ['-O2']}
 )
 
 if __name__ == '__main__':
   setup(
-      name='roi_align',
+      name='_roi_align',
       ext_modules=[cuda_ex],
       # inject our custom trigger
       cmdclass={'build_ext': BuildExtension},
