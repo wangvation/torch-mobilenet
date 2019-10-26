@@ -15,6 +15,12 @@ class RoIAlignFunction(Function):
   def forward(self, features, rois):
     self.rois = rois
     self.feature_size = features.size()
+    a = torch.full((3, 3), 2, dtype=torch.float64).cuda()
+    b = torch.full((3, 3), 3, dtype=torch.float64).cuda()
+    c = roi_align.roi_align_cuda_test(a, b)
+    print(features.dtype)
+    print(rois.dtype)
+    print(c.size(), c, c.dtype)
 
     batch_size, num_channels, data_height, data_width = features.size()
     num_rois = rois.size(0)

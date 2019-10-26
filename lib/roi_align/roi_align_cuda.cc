@@ -5,8 +5,12 @@
 
 extern THCState *state;
 
-int roi_align_forward_cuda(int aligned_height, int aligned_width, float spatial_scale,
-                           THCudaTensor * features, THCudaTensor * rois, THCudaTensor * output)
+int roi_align_forward_cuda(int aligned_height
+                           int aligned_width
+                           float spatial_scale
+                           THCudaTensor * features
+                           THCudaTensor * rois
+                           THCudaTensor * output)
 {
   // Grab the input tensor
   float * data_flat = THCudaTensor_data(state, features);
@@ -40,8 +44,12 @@ int roi_align_forward_cuda(int aligned_height, int aligned_width, float spatial_
   return 1;
 }
 
-int roi_align_backward_cuda(int aligned_height, int aligned_width, float spatial_scale,
-                            THCudaTensor * top_grad, THCudaTensor * rois, THCudaTensor * bottom_grad)
+int roi_align_backward_cuda(int aligned_height,
+                            int aligned_width,
+                            float spatial_scale,
+                            THCudaTensor * top_grad,
+                            THCudaTensor * rois,
+                            THCudaTensor * bottom_grad)
 {
   // Grab the input tensor
   float * top_grad_flat = THCudaTensor_data(state, top_grad);

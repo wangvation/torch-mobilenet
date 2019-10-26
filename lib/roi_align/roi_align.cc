@@ -3,21 +3,40 @@
 #include <THC/THC.h>
 #include <math.h>
 #include <omp.h>
+#include <iostream>
+#include <string>
 #include "roi_align_cuda.h"
 
+using namespace std;
 
-void ROIAlignForwardCpu(const float* bottom_data, const float spatial_scale, const int num_rois,
-                        const int height, const int width, const int channels,
-                        const int aligned_height, const int aligned_width, const float * bottom_rois,
+void ROIAlignForwardCpu(const float* bottom_data,
+                        const float spatial_scale,
+                        const int num_rois,
+                        const int height,
+                        const int width,
+                        const int channels,
+                        const int aligned_height,
+                        const int aligned_width,
+                        const float * bottom_rois,
                         float* top_data);
 
-void ROIAlignBackwardCpu(const float* top_diff, const float spatial_scale, const int num_rois,
-                         const int height, const int width, const int channels,
-                         const int aligned_height, const int aligned_width, const float * bottom_rois,
+void ROIAlignBackwardCpu(const float* top_diff,
+                         const float spatial_scale,
+                         const int num_rois,
+                         const int height,
+                         const int width,
+                         const int channels,
+                         const int aligned_height,
+                         const int aligned_width,
+                         const float * bottom_rois,
                          float* top_data);
 
-int roi_align_forward(int aligned_height, int aligned_width, float spatial_scale,
-                      THFloatTensor * features, THFloatTensor * rois, THFloatTensor * output)
+int roi_align_forward(int aligned_height,
+                      int aligned_width,
+                      float spatial_scale,
+                      THFloatTensor * features,
+                      THFloatTensor * rois,
+                      THFloatTensor * output)
 {
   //Grab the input tensor
   float * data_flat = THFloatTensor_data(features);
@@ -47,8 +66,12 @@ int roi_align_forward(int aligned_height, int aligned_width, float spatial_scale
   return 1;
 }
 
-int roi_align_backward(int aligned_height, int aligned_width, float spatial_scale,
-                       THFloatTensor * top_grad, THFloatTensor * rois, THFloatTensor * bottom_grad)
+int roi_align_backward(int aligned_height,
+                       int aligned_width,
+                       float spatial_scale,
+                       THFloatTensor * top_grad,
+                       THFloatTensor * rois,
+                       THFloatTensor * bottom_grad)
 {
   //Grab the input tensor
   float * top_grad_flat = THFloatTensor_data(top_grad);
@@ -80,9 +103,15 @@ int roi_align_backward(int aligned_height, int aligned_width, float spatial_scal
   return 1;
 }
 
-void ROIAlignForwardCpu(const float* bottom_data, const float spatial_scale, const int num_rois,
-                        const int height, const int width, const int channels,
-                        const int aligned_height, const int aligned_width, const float * bottom_rois,
+void ROIAlignForwardCpu(const float* bottom_data,
+                        const float spatial_scale,
+                        const int num_rois,
+                        const int height,
+                        const int width,
+                        const int channels,
+                        const int aligned_height,
+                        const int aligned_width,
+                        const float * bottom_rois,
                         float* top_data)
 {
   const int output_size = num_rois * aligned_height * aligned_width * channels;
@@ -138,9 +167,15 @@ void ROIAlignForwardCpu(const float* bottom_data, const float spatial_scale, con
   }
 }
 
-void ROIAlignBackwardCpu(const float* top_diff, const float spatial_scale, const int num_rois,
-                         const int height, const int width, const int channels,
-                         const int aligned_height, const int aligned_width, const float * bottom_rois,
+void ROIAlignBackwardCpu(const float* top_diff,
+                         const float spatial_scale,
+                         const int num_rois,
+                         const int height,
+                         const int width,
+                         const int channels,
+                         const int aligned_height,
+                         const int aligned_width,
+                         const float * bottom_rois,
                          float* bottom_diff)
 {
   const int output_size = num_rois * aligned_height * aligned_width * channels;
@@ -192,24 +227,59 @@ void ROIAlignBackwardCpu(const float* top_diff, const float spatial_scale, const
   }
 }
 
-int roi_align_forward_gpu(int aligned_height, int aligned_width, float spatial_scale,
-                          THCudaTensor * features, THCudaTensor * rois, THCudaTensor * output) {
+int roi_align_forward_gpu(int aligned_height,
+                          int aligned_width,
+                          float spatial_scale,
+                          THCudaTensor * features,
+                          THCudaTensor * rois,
+                          THCudaTensor * output) {
   return roi_align_forward_cuda(aligned_height, aligned_width,
                                 spatial_scale, features,
                                 rois, output);
 }
 
-int roi_align_backward_gpu(int aligned_height, int aligned_width, float spatial_scale,
-                           THCudaTensor * top_grad, THCudaTensor * rois, THCudaTensor * bottom_grad) {
+int roi_align_backward_gpu(int aligned_height,
+                           int aligned_width,
+                           float spatial_scale,
+                           THCudaTensor * top_grad,
+                           THCudaTensor * rois,
+                           THCudaTensor * bottom_grad) {
   return roi_align_backward_cuda(aligned_height, aligned_width,
                                  spatial_scale, top_grad,
                                  rois, bottom_grad);
 }
+
+
+// torch::Tensor roi_align_cuda_test(torch::Tensor a, torch::Tensor b) {
+//   torch::Tensor res = torch::zeros_like(a, torch::device(torch::kCUDA).dtype(torch::kFloat));
+//   res = a + b;
+//   cout << "a.dtype:" << a.dtype() << endl;
+//   cout << "b.dtype:" << b.dtype() << endl;
+//   const auto rows = a.size(0);
+//   const auto cols = a.size(1);
+//   char buff[100];
+//   for (int i = 0; i < rows; ++i)
+//   {
+//     for (int j = 0; j < cols; ++j)
+//     {
+
+//       snprintf(buff, sizeof(buff),
+//                "a[%d][%d]:%f,b[%d][%d]:%f",
+//                i, j, a[i][j].item<float>(),
+//                i, j, b[i][j].item<float>());
+//       std::string buffStr = buff;
+//       cout << buffStr << endl;
+//     }
+//   }
+//   return res;
+// }
+
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("roi_align_forward", &roi_align_forward, "roi_align_forward");
   m.def("roi_align_backward", &roi_align_backward, "roi_align_backward");
   m.def("roi_align_forward_cuda", &roi_align_forward_cuda, "roi_align_forward_cuda");
   m.def("roi_align_backward_cuda", &roi_align_backward_cuda, "roi_align_backward_cuda");
+  // m.def("roi_align_cuda_test", &roi_align_cuda_test, "roi_align_cuda_test");
 }
 
