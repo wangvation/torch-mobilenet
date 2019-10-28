@@ -25,16 +25,18 @@ class RoIAlignFunction(Function):
     batch_size, num_channels, data_height, data_width = features.size()
     num_rois = rois.size(0)
 
+    print('aligned features.')
     output = features.new(num_rois, num_channels,
                           self.aligned_height,
                           self.aligned_width).zero_()
+    print('aligned is_cuda.')
     if features.is_cuda:
-      roi_align.roi_align_forward_cuda(self.aligned_height,
-                                       self.aligned_width,
-                                       self.spatial_scale,
-                                       features,
-                                       rois,
-                                       output)
+      roi_align.roi_align_forward_gpu(self.aligned_height,
+                                      self.aligned_width,
+                                      self.spatial_scale,
+                                      features,
+                                      rois,
+                                      output)
     else:
       roi_align.roi_align_forward(self.aligned_height,
                                   self.aligned_width,
@@ -42,6 +44,8 @@ class RoIAlignFunction(Function):
                                   features,
                                   rois,
                                   output)
+
+    print('aligned finished.')
 
     return output
 
@@ -52,12 +56,12 @@ class RoIAlignFunction(Function):
 
     grad_input = self.rois.new(batch_size, num_channels, data_height,
                                data_width).zero_()
-    roi_align.roi_align_backward_cuda(self.aligned_height,
-                                      self.aligned_width,
-                                      self.spatial_scale,
-                                      grad_output,
-                                      self.rois,
-                                      grad_input)
+    roi_align.roi_align_backward_gpu(self.aligned_height,
+                                     self.aligned_width,
+                                     self.spatial_scale,
+                                     grad_output,
+                                     self.rois,
+                                     grad_input)
 
     # print grad_input
 

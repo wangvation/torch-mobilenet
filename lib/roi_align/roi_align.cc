@@ -1,8 +1,4 @@
 #include <torch/torch.h>
-#include <torch/extension.h>
-#include <TH/TH.h>
-#include <THC/THC.h>
-#include <ATen/ATen.h>
 #include <math.h>
 #include <omp.h>
 #include <iostream>
@@ -130,7 +126,7 @@ void ROIAlignBackwardCpu(const float spatial_scale,
         int ws = fminf(floor(w), width - 2);
 
         // bilinear interpolation
-        if (h < 0 || h >= height || w < 0 || w >= width)
+        if (h >= 0 && h < height && w >= 0 && w < width)
         {
           float h_ratio = h - (float)(hs);
           float w_ratio = w - (float)(ws);
@@ -204,8 +200,11 @@ int roi_align_forward_gpu(int aligned_height,
                           torch::Tensor features,
                           torch::Tensor rois,
                           torch::Tensor output) {
-  return roi_align_forward_cuda(aligned_height, aligned_width,
-                                spatial_scale, features,
+
+  return roi_align_forward_cuda(aligned_height,
+                                aligned_width,
+                                spatial_scale,
+                                features,
                                 rois, output);
 }
 
@@ -215,8 +214,11 @@ int roi_align_backward_gpu(int aligned_height,
                            torch::Tensor top_grad,
                            torch::Tensor rois,
                            torch::Tensor bottom_grad) {
-  return roi_align_backward_cuda(aligned_height, aligned_width,
-                                 spatial_scale, top_grad,
+
+  return roi_align_backward_cuda(aligned_height,
+                                 aligned_width,
+                                 spatial_scale,
+                                 top_grad,
                                  rois, bottom_grad);
 }
 
@@ -250,8 +252,8 @@ torch::Tensor roi_align_cuda_test(torch::Tensor a, torch::Tensor b) {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("roi_align_forward", &roi_align_forward, "roi_align_forward");
   m.def("roi_align_backward", &roi_align_backward, "roi_align_backward");
-  m.def("roi_align_forward_cuda", &roi_align_forward_cuda, "roi_align_forward_cuda");
-  m.def("roi_align_backward_cuda", &roi_align_backward_cuda, "roi_align_backward_cuda");
+  m.def("roi_align_forward_gpu", &roi_align_forward_gpu, "roi_align_forward_gpu");
+  m.def("roi_align_backward_gpu", &roi_align_backward_gpu, "roi_align_backward_gpu");
   m.def("roi_align_cuda_test", &roi_align_cuda_test, "roi_align_cuda_test");
 }
 

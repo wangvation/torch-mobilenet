@@ -30,7 +30,7 @@ cuda_ex = CUDAExtension(
     define_macros=defines,
     extra_objects=extra_objects,
     include_dirs=torch.utils.cpp_extension.include_paths(),
-    extra_compile_args={'cxx': ['-g'],
+    extra_compile_args={'cxx': ['-g', '--std=c++11'],
                         'nvcc': ['-O2']}
 )
 
