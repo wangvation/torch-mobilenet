@@ -1,6 +1,8 @@
 #include <torch/torch.h>
+#include <torch/extension.h>
 #include <TH/TH.h>
 #include <THC/THC.h>
+#include <ATen/ATen.h>
 #include <math.h>
 #include <omp.h>
 #include <iostream>
@@ -9,59 +11,164 @@
 
 using namespace std;
 
-void ROIAlignForwardCpu(const float* bottom_data,
-                        const float spatial_scale,
-                        const int num_rois,
-                        const int height,
-                        const int width,
-                        const int channels,
+
+void ROIAlignForwardCpu(const float spatial_scale,
                         const int aligned_height,
                         const int aligned_width,
-                        const float * bottom_rois,
-                        float* top_data);
+                        torch::Tensor features,
+                        torch::Tensor rois,
+                        torch::Tensor output)
 
-void ROIAlignBackwardCpu(const float* top_diff,
-                         const float spatial_scale,
-                         const int num_rois,
-                         const int height,
-                         const int width,
-                         const int channels,
+{
+  // Number of ROIs
+  int num_rois = rois.size(0);
+
+  // height
+  int height = features.size(2);
+  // width
+  int width = features.size(3);
+  // Number of channels
+  int channels = features.size(1);
+
+
+  for (int n = 0; n < num_rois; ++n)
+  {
+    int roi_bi = (int)rois[n][0].item<float>();
+    float roi_start_w = rois[n][1].item<float>() * spatial_scale;
+    float roi_start_h = rois[n][2].item<float>() * spatial_scale;
+    float roi_end_w = rois[n][3].item<float>() * spatial_scale;
+    float roi_end_h = rois[n][4].item<float>() * spatial_scale;
+
+    // Force malformed ROI to be 1x1
+    float roi_width = fmaxf(roi_end_w - roi_start_w + 1., 0.);
+    float roi_height = fmaxf(roi_end_h - roi_start_h + 1., 0.);
+    float bin_size_h = roi_height / (aligned_height - 1.);
+    float bin_size_w = roi_width / (aligned_width - 1.);
+
+    for (int ph = 0; ph < aligned_height; ++ph)
+    {
+      float h = (float)(ph) * bin_size_h + roi_start_h;
+      int hs = fminf(floor(h), height - 2);
+      float h_ratio = h - (float)(hs);
+
+      for (int pw = 0; pw < aligned_width; ++pw)
+      {
+        float w = (float)(pw) * bin_size_w + roi_start_w;
+        int ws = fminf(floor(w), width - 2);
+        float w_ratio = w - (float)(ws);
+
+        // bilinear interpolation
+        if (h < 0 || h >= height || w < 0 || w >= width)
+        {
+          for (int c = 0; c < channels; ++c)
+          {
+            output[n][c][h][w] = 0.;
+          }
+
+        } else {
+
+          for (int c = 0; c < channels; ++c)
+          {
+            output[n][c][ph][pw] = 0.;
+            output[n][c][ph][pw] += features[roi_bi][c][hs][ws] * (1. - h_ratio) * (1. - w_ratio);
+            output[n][c][ph][pw] += features[roi_bi][c][hs][ws + 1] * (1. - h_ratio) * w_ratio;
+            output[n][c][ph][pw] += features[roi_bi][c][hs + 1][ws] * h_ratio * (1. - w_ratio);
+            output[n][c][ph][pw] += features[roi_bi][c][hs + 1][ws + 1] * h_ratio * w_ratio;
+
+          }
+        }
+      }
+    }
+  }
+}
+
+void ROIAlignBackwardCpu(const float spatial_scale,
                          const int aligned_height,
                          const int aligned_width,
-                         const float * bottom_rois,
-                         float* top_data);
+                         torch::Tensor top_grad,
+                         torch::Tensor rois,
+                         torch::Tensor bottom_grad
+                        )
+{
+
+  // Number of ROIs
+  int num_rois = rois.size(0);
+
+  // batch size
+  // int batch_size = bottom_grad.size(0);
+  // Number of channels
+  int channels = bottom_grad.size(1);
+  // data height
+  int height = bottom_grad.size(2);
+  // data width
+  int width = bottom_grad.size(3);
+
+  for (int n = 0; n < num_rois; ++n)
+  {
+    int roi_bi = (int)rois[n][0].item<float>();
+    float roi_start_w = rois[n][1].item<float>() * spatial_scale;
+    float roi_start_h = rois[n][2].item<float>() * spatial_scale;
+    float roi_end_w = rois[n][3].item<float>() * spatial_scale;
+    float roi_end_h = rois[n][4].item<float>() * spatial_scale;
+
+    // Force malformed ROI to be 1x1
+    float roi_width = fmaxf(roi_end_w - roi_start_w + 1., 0.);
+    float roi_height = fmaxf(roi_end_h - roi_start_h + 1., 0.);
+    float bin_size_h = roi_height / (aligned_height - 1.);
+    float bin_size_w = roi_width / (aligned_width - 1.);
+
+
+    for (int ph = 0; ph < aligned_height; ++ph)
+    {
+
+      float h = (float)(ph) * bin_size_h + roi_start_h;
+      int hs = fminf(floor(h), height - 2);
+      for (int pw = 0; pw < aligned_width; ++pw)
+      {
+
+        float w = (float)(pw) * bin_size_w + roi_start_w;
+        int ws = fminf(floor(w), width - 2);
+
+        // bilinear interpolation
+        if (h < 0 || h >= height || w < 0 || w >= width)
+        {
+          float h_ratio = h - (float)(hs);
+          float w_ratio = w - (float)(ws);
+          for (int c = 0; c < channels; ++c)
+          {
+
+            bottom_grad[roi_bi][c][hs][ws] += top_grad[n][c][ph][pw] * (1. - h_ratio) * (1. - w_ratio);
+            bottom_grad[roi_bi][c][hs][ws + 1] += top_grad[n][c][ph][pw] * (1. - h_ratio) *  w_ratio;
+            bottom_grad[roi_bi][c][hs + 1][ws] += top_grad[n][c][ph][pw] * h_ratio * (1. - w_ratio);
+            bottom_grad[roi_bi][c][hs + 1][ws + 1] += top_grad[n][c][ph][pw] * h_ratio * w_ratio;
+
+          }
+        }
+      }
+    }
+  }
+}
 
 int roi_align_forward(int aligned_height,
                       int aligned_width,
                       float spatial_scale,
-                      THFloatTensor * features,
-                      THFloatTensor * rois,
-                      THFloatTensor * output)
+                      torch::Tensor features,
+                      torch::Tensor rois,
+                      torch::Tensor output)
 {
-  //Grab the input tensor
-  float * data_flat = THFloatTensor_data(features);
-  float * rois_flat = THFloatTensor_data(rois);
-
-  float * output_flat = THFloatTensor_data(output);
 
   // Number of ROIs
-  int num_rois = THFloatTensor_size(rois, 0);
-  int size_rois = THFloatTensor_size(rois, 1);
+  int size_rois = rois.size(1);
   if (size_rois != 5)
   {
     return 0;
   }
-
-  // data height
-  int data_height = THFloatTensor_size(features, 2);
-  // data width
-  int data_width = THFloatTensor_size(features, 3);
-  // Number of channels
-  int num_channels = THFloatTensor_size(features, 1);
-
-  // do ROIAlignForward
-  ROIAlignForwardCpu(data_flat, spatial_scale, num_rois, data_height, data_width, num_channels,
-                     aligned_height, aligned_width, rois_flat, output_flat);
+  ROIAlignForwardCpu(spatial_scale,
+                     aligned_height,
+                     aligned_width,
+                     features,
+                     rois,
+                     output);
 
   return 1;
 }
@@ -69,170 +176,34 @@ int roi_align_forward(int aligned_height,
 int roi_align_backward(int aligned_height,
                        int aligned_width,
                        float spatial_scale,
-                       THFloatTensor * top_grad,
-                       THFloatTensor * rois,
-                       THFloatTensor * bottom_grad)
+                       torch::Tensor top_grad,
+                       torch::Tensor rois,
+                       torch::Tensor bottom_grad)
 {
-  //Grab the input tensor
-  float * top_grad_flat = THFloatTensor_data(top_grad);
-  float * rois_flat = THFloatTensor_data(rois);
-
-  float * bottom_grad_flat = THFloatTensor_data(bottom_grad);
 
   // Number of ROIs
-  int num_rois = THFloatTensor_size(rois, 0);
-  int size_rois = THFloatTensor_size(rois, 1);
+  int size_rois = rois.size(1);
   if (size_rois != 5)
   {
     return 0;
   }
-
-  // batch size
-  // int batch_size = THFloatTensor_size(bottom_grad, 0);
-  // data height
-  int data_height = THFloatTensor_size(bottom_grad, 2);
-  // data width
-  int data_width = THFloatTensor_size(bottom_grad, 3);
-  // Number of channels
-  int num_channels = THFloatTensor_size(bottom_grad, 1);
-
-  // do ROIAlignBackward
-  ROIAlignBackwardCpu(top_grad_flat, spatial_scale, num_rois, data_height,
-                      data_width, num_channels, aligned_height, aligned_width, rois_flat, bottom_grad_flat);
+  ROIAlignBackwardCpu(spatial_scale,
+                      aligned_height,
+                      aligned_width,
+                      top_grad,
+                      rois,
+                      bottom_grad);
 
   return 1;
 }
 
-void ROIAlignForwardCpu(const float* bottom_data,
-                        const float spatial_scale,
-                        const int num_rois,
-                        const int height,
-                        const int width,
-                        const int channels,
-                        const int aligned_height,
-                        const int aligned_width,
-                        const float * bottom_rois,
-                        float* top_data)
-{
-  const int output_size = num_rois * aligned_height * aligned_width * channels;
-
-  int idx = 0;
-  for (idx = 0; idx < output_size; ++idx)
-  {
-    // (n, c, ph, pw) is an element in the aligned output
-    int pw = idx % aligned_width;
-    int ph = (idx / aligned_width) % aligned_height;
-    int c = (idx / aligned_width / aligned_height) % channels;
-    int n = idx / aligned_width / aligned_height / channels;
-
-    float roi_batch_ind = bottom_rois[n * 5 + 0];
-    float roi_start_w = bottom_rois[n * 5 + 1] * spatial_scale;
-    float roi_start_h = bottom_rois[n * 5 + 2] * spatial_scale;
-    float roi_end_w = bottom_rois[n * 5 + 3] * spatial_scale;
-    float roi_end_h = bottom_rois[n * 5 + 4] * spatial_scale;
-
-    // Force malformed ROI to be 1x1
-    float roi_width = fmaxf(roi_end_w - roi_start_w + 1., 0.);
-    float roi_height = fmaxf(roi_end_h - roi_start_h + 1., 0.);
-    float bin_size_h = roi_height / (aligned_height - 1.);
-    float bin_size_w = roi_width / (aligned_width - 1.);
-
-    float h = (float)(ph) * bin_size_h + roi_start_h;
-    float w = (float)(pw) * bin_size_w + roi_start_w;
-
-    int hstart = fminf(floor(h), height - 2);
-    int wstart = fminf(floor(w), width - 2);
-
-    int img_start = roi_batch_ind * channels * height * width;
-
-    // bilinear interpolation
-    if (h < 0 || h >= height || w < 0 || w >= width)
-    {
-      top_data[idx] = 0.;
-    }
-    else
-    {
-      float h_ratio = h - (float)(hstart);
-      float w_ratio = w - (float)(wstart);
-      int upleft = img_start + (c * height + hstart) * width + wstart;
-      int upright = upleft + 1;
-      int downleft = upleft + width;
-      int downright = downleft + 1;
-
-      top_data[idx] = bottom_data[upleft] * (1. - h_ratio) * (1. - w_ratio)
-                      + bottom_data[upright] * (1. - h_ratio) * w_ratio
-                      + bottom_data[downleft] * h_ratio * (1. - w_ratio)
-                      + bottom_data[downright] * h_ratio * w_ratio;
-    }
-  }
-}
-
-void ROIAlignBackwardCpu(const float* top_diff,
-                         const float spatial_scale,
-                         const int num_rois,
-                         const int height,
-                         const int width,
-                         const int channels,
-                         const int aligned_height,
-                         const int aligned_width,
-                         const float * bottom_rois,
-                         float* bottom_diff)
-{
-  const int output_size = num_rois * aligned_height * aligned_width * channels;
-
-  int idx = 0;
-  for (idx = 0; idx < output_size; ++idx)
-  {
-    // (n, c, ph, pw) is an element in the aligned output
-    int pw = idx % aligned_width;
-    int ph = (idx / aligned_width) % aligned_height;
-    int c = (idx / aligned_width / aligned_height) % channels;
-    int n = idx / aligned_width / aligned_height / channels;
-
-    float roi_batch_ind = bottom_rois[n * 5 + 0];
-    float roi_start_w = bottom_rois[n * 5 + 1] * spatial_scale;
-    float roi_start_h = bottom_rois[n * 5 + 2] * spatial_scale;
-    float roi_end_w = bottom_rois[n * 5 + 3] * spatial_scale;
-    float roi_end_h = bottom_rois[n * 5 + 4] * spatial_scale;
-
-    // Force malformed ROI to be 1x1
-    float roi_width = fmaxf(roi_end_w - roi_start_w + 1., 0.);
-    float roi_height = fmaxf(roi_end_h - roi_start_h + 1., 0.);
-    float bin_size_h = roi_height / (aligned_height - 1.);
-    float bin_size_w = roi_width / (aligned_width - 1.);
-
-    float h = (float)(ph) * bin_size_h + roi_start_h;
-    float w = (float)(pw) * bin_size_w + roi_start_w;
-
-    int hstart = fminf(floor(h), height - 2);
-    int wstart = fminf(floor(w), width - 2);
-
-    int img_start = roi_batch_ind * channels * height * width;
-
-    // bilinear interpolation
-    if (h < 0 || h >= height || w < 0 || w >= width)
-    {
-      float h_ratio = h - (float)(hstart);
-      float w_ratio = w - (float)(wstart);
-      int upleft = img_start + (c * height + hstart) * width + wstart;
-      int upright = upleft + 1;
-      int downleft = upleft + width;
-      int downright = downleft + 1;
-
-      bottom_diff[upleft] += top_diff[idx] * (1. - h_ratio) * (1. - w_ratio);
-      bottom_diff[upright] += top_diff[idx] * (1. - h_ratio) *  w_ratio;
-      bottom_diff[downleft] += top_diff[idx] * h_ratio * (1. - w_ratio);
-      bottom_diff[downright] += top_diff[idx] * h_ratio * w_ratio;
-    }
-  }
-}
 
 int roi_align_forward_gpu(int aligned_height,
                           int aligned_width,
                           float spatial_scale,
-                          THCudaTensor * features,
-                          THCudaTensor * rois,
-                          THCudaTensor * output) {
+                          torch::Tensor features,
+                          torch::Tensor rois,
+                          torch::Tensor output) {
   return roi_align_forward_cuda(aligned_height, aligned_width,
                                 spatial_scale, features,
                                 rois, output);
@@ -241,38 +212,39 @@ int roi_align_forward_gpu(int aligned_height,
 int roi_align_backward_gpu(int aligned_height,
                            int aligned_width,
                            float spatial_scale,
-                           THCudaTensor * top_grad,
-                           THCudaTensor * rois,
-                           THCudaTensor * bottom_grad) {
+                           torch::Tensor top_grad,
+                           torch::Tensor rois,
+                           torch::Tensor bottom_grad) {
   return roi_align_backward_cuda(aligned_height, aligned_width,
                                  spatial_scale, top_grad,
                                  rois, bottom_grad);
 }
 
 
-// torch::Tensor roi_align_cuda_test(torch::Tensor a, torch::Tensor b) {
-//   torch::Tensor res = torch::zeros_like(a, torch::device(torch::kCUDA).dtype(torch::kFloat));
-//   res = a + b;
-//   cout << "a.dtype:" << a.dtype() << endl;
-//   cout << "b.dtype:" << b.dtype() << endl;
-//   const auto rows = a.size(0);
-//   const auto cols = a.size(1);
-//   char buff[100];
-//   for (int i = 0; i < rows; ++i)
-//   {
-//     for (int j = 0; j < cols; ++j)
-//     {
+torch::Tensor roi_align_cuda_test(torch::Tensor a, torch::Tensor b) {
+  torch::Tensor res = torch::zeros_like(a, torch::device(torch::kCUDA).dtype(torch::kFloat));
+  // res = a + b;
+  cout << "a.dtype:" << a.dtype() << endl;
+  cout << "b.dtype:" << b.dtype() << endl;
+  const auto rows = a.size(0);
+  const auto cols = a.size(1);
+  char buff[100];
+  for (int i = 0; i < rows; ++i)
+  {
+    for (int j = 0; j < cols; ++j)
+    {
 
-//       snprintf(buff, sizeof(buff),
-//                "a[%d][%d]:%f,b[%d][%d]:%f",
-//                i, j, a[i][j].item<float>(),
-//                i, j, b[i][j].item<float>());
-//       std::string buffStr = buff;
-//       cout << buffStr << endl;
-//     }
-//   }
-//   return res;
-// }
+      snprintf(buff, sizeof(buff),
+               "a[%d][%d]:%f,b[%d][%d]:%f",
+               i, j, a[i][j].item<float>(),
+               i, j, b[i][j].item<float>());
+      std::string buffStr = buff;
+      cout << buffStr << endl;
+      res[i][j] = 7.3;
+    }
+  }
+  return res;
+}
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -280,6 +252,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("roi_align_backward", &roi_align_backward, "roi_align_backward");
   m.def("roi_align_forward_cuda", &roi_align_forward_cuda, "roi_align_forward_cuda");
   m.def("roi_align_backward_cuda", &roi_align_backward_cuda, "roi_align_backward_cuda");
-  // m.def("roi_align_cuda_test", &roi_align_cuda_test, "roi_align_cuda_test");
+  m.def("roi_align_cuda_test", &roi_align_cuda_test, "roi_align_cuda_test");
 }
 

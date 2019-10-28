@@ -6,50 +6,41 @@ extern "C" {
 #endif
 
 __global__ void ROIAlignForward(const int nthreads,
-                                const float* bottom_data,
+                                const torch::Tensor bottom_data,
                                 const float spatial_scale,
                                 const int height,
                                 const int width,
                                 const int channels,
                                 const int aligned_height,
                                 const int aligned_width,
-                                const float* bottom_rois,
-                                float* top_data);
+                                const torch::Tensor bottom_rois,
+                                torch::Tensor top_data);
 
-int ROIAlignForwardLaucher(const float* bottom_data,
+int ROIAlignForwardLaucher(const torch::Tensor bottom_data,
                            const float spatial_scale,
-                           const int num_rois,
-                           const int height,
-                           const int width,
-                           const int channels,
                            const int aligned_height,
                            const int aligned_width,
-                           const float* bottom_rois,
-                           float* top_data,
+                           const torch::Tensor bottom_rois,
+                           torch::Tensor top_data,
                            cudaStream_t stream);
 
 __global__ void ROIAlignBackward(const int nthreads,
-                                 const float* top_diff,
+                                 const torch::Tensor top_diff,
                                  const float spatial_scale,
                                  const int height,
                                  const int width,
                                  const int channels,
                                  const int aligned_height,
                                  const int aligned_width,
-                                 float* bottom_diff,
-                                 const float* bottom_rois);
+                                 torch::Tensor bottom_diff,
+                                 const torch::Tensor bottom_rois);
 
-int ROIAlignBackwardLaucher(const float* top_diff,
+int ROIAlignBackwardLaucher(const torch::Tensor top_diff,
                             const float spatial_scale,
-                            const int batch_size,
-                            const int num_rois,
-                            const int height,
-                            const int width,
-                            const int channels,
                             const int aligned_height,
                             const int aligned_width,
-                            const float* bottom_rois,
-                            float* bottom_diff,
+                            const torch::Tensor bottom_rois,
+                            torch::Tensor bottom_diff,
                             cudaStream_t stream);
 
 #ifdef __cplusplus

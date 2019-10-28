@@ -2,13 +2,13 @@
 int roi_align_forward_cuda(int aligned_height,
                            int aligned_width,
                            float spatial_scale,
-                           THCudaTensor * features,
-                           THCudaTensor * rois,
-                           THCudaTensor * output);
+                           torch::Tensor features,
+                           torch::Tensor rois,
+                           torch::Tensor output);
 
 int roi_align_backward_cuda(int aligned_height,
                             int aligned_width,
                             float spatial_scale,
-                            THCudaTensor * top_grad,
-                            THCudaTensor * rois,
-                            THCudaTensor * bottom_grad);
+                            torch::Tensor top_grad,
+                            torch::Tensor rois,
+                            torch::Tensor bottom_grad);
