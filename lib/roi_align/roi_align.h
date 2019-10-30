@@ -25,6 +25,3 @@ int roi_align_backward_gpu(int aligned_height,
                            torch::Tensor top_grad,
                            torch::Tensor rois,
                            torch::Tensor bottom_grad);
-
-torch::Tensor roi_align_cuda_test(torch::Tensor a,
-                                  torch::Tensor b);

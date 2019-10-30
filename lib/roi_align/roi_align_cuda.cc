@@ -1,10 +1,8 @@
 #include <torch/torch.h>
 #include <torch/extension.h>
 #include <math.h>
-#include <iostream>
 #include "roi_align_kernel.h"
 
-using namespace std;
 
 int roi_align_forward_cuda(int aligned_height,
                            int aligned_width,
@@ -28,7 +26,6 @@ int roi_align_forward_cuda(int aligned_height,
   // Number of channels
   int channels = features.size(1);
 
-  cout << "roi_align_forward_cuda" << endl;
   ROIAlignForwardLaucher(spatial_scale,
                          aligned_height,
                          aligned_width, num_rois,
@@ -67,7 +64,6 @@ int roi_align_backward_cuda(int aligned_height,
   // Number of channels
   int channels = bottom_grad.size(1);
 
-  cout << "roi_align_forward_cuda" << endl;
   ROIAlignBackwardLaucher(spatial_scale,
                           aligned_height,
                           aligned_width, num_rois,

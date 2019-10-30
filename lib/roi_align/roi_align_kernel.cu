@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
-#include <iostream>
 #include "roi_align_kernel.h"
 
-using namespace std;
 
 template <typename scalar_t>
 __global__ void ROIAlignForward(const int nthreads,
@@ -91,7 +89,6 @@ void ROIAlignForwardLaucher(const float spatial_scale,
   const int output_size = num_rois * aligned_height * aligned_width * channels;
 
   const int block_size = (int)ceil(output_size * 1.0 / kThreadsPerBlock) ;
-  cout << "forward blocks:" << block_size << endl;
 
   ROIAlignForward<float> <<< block_size, kThreadsPerBlock >>>(
     output_size,
@@ -105,12 +102,6 @@ void ROIAlignForwardLaucher(const float spatial_scale,
     rois,
     output);
 
-  // cudaError_t err;
-  // err = cudaGetLastError();
-  // if (cudaSuccess != err) {
-  //   fprintf( stderr, "0cudaCheckError() failed : %s\n", cudaGetErrorString( err ) );
-  //   // exit( -1 );
-  // }
 
 }
 
@@ -188,18 +179,10 @@ void ROIAlignBackwardLaucher(const float spatial_scale,
 
   const int output_size = num_rois * aligned_height * aligned_width * channels;
   const int block_size = (int)ceil(output_size * 1.0 / kThreadsPerBlock) ;
-  cout << "backward blocks: " << block_size << endl;
 
   ROIAlignBackward<float> <<< block_size, kThreadsPerBlock >>> (
     output_size,  spatial_scale, height, width,
     channels, aligned_height, aligned_width,
     top_diff, rois, bottom_diff);
-
-  // cudaError_t err;
-  // err = cudaGetLastError();
-  // if (cudaSuccess != err) {
-  //   fprintf( stderr, "1cudaCheckError() failed : %s\n", cudaGetErrorString(err));
-  //   // exit( -1 );
-  // }
 
 }

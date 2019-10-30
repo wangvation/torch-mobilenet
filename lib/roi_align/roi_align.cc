@@ -223,37 +223,10 @@ int roi_align_backward_gpu(int aligned_height,
 }
 
 
-torch::Tensor roi_align_cuda_test(torch::Tensor a, torch::Tensor b) {
-  torch::Tensor res = torch::zeros_like(a, torch::device(torch::kCUDA).dtype(torch::kFloat));
-  // res = a + b;
-  cout << "a.dtype:" << a.dtype() << endl;
-  cout << "b.dtype:" << b.dtype() << endl;
-  const auto rows = a.size(0);
-  const auto cols = a.size(1);
-  char buff[100];
-  for (int i = 0; i < rows; ++i)
-  {
-    for (int j = 0; j < cols; ++j)
-    {
-
-      snprintf(buff, sizeof(buff),
-               "a[%d][%d]:%f,b[%d][%d]:%f",
-               i, j, a[i][j].item<float>(),
-               i, j, b[i][j].item<float>());
-      std::string buffStr = buff;
-      cout << buffStr << endl;
-      res[i][j] = 7.3;
-    }
-  }
-  return res;
-}
-
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("roi_align_forward", &roi_align_forward, "roi_align_forward");
   m.def("roi_align_backward", &roi_align_backward, "roi_align_backward");
   m.def("roi_align_forward_gpu", &roi_align_forward_gpu, "roi_align_forward_gpu");
   m.def("roi_align_backward_gpu", &roi_align_backward_gpu, "roi_align_backward_gpu");
-  m.def("roi_align_cuda_test", &roi_align_cuda_test, "roi_align_cuda_test");
 }
 
