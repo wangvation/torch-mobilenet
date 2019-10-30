@@ -1,34 +1,39 @@
 #include <torch/torch.h>
-#include <TH/TH.h>
 #include <math.h>
+#include "roi_pooling_cuda.h"
 
-int roi_pooling_forward(int pooled_height, int pooled_width, float spatial_scale,
-                        THFloatTensor * features, THFloatTensor * rois, THFloatTensor * output)
+int roi_pooling_forward(int pooled_height,
+                        int pooled_width,
+                        float spatial_scale,
+                        torch::Tensor features,
+                        torch::Tensor rois,
+                        torch::Tensor output)
 {
   // Grab the input tensor
-  float * data_flat = THFloatTensor_data(features);
-  float * rois_flat = THFloatTensor_data(rois);
+  float * data_flat = features.data_ptr<float>();
+  float * rois_flat = rois.data_ptr<float>();
 
-  float * output_flat = THFloatTensor_data(output);
+  float * output_flat = output.data_ptr<float>();
 
   // Number of ROIs
-  int num_rois = THFloatTensor_size(rois, 0);
-  int size_rois = THFloatTensor_size(rois, 1);
+  int num_rois = rois.size(0);
+  int size_rois = rois.size(1);
   // batch size
-  int batch_size = THFloatTensor_size(features, 0);
+  int batch_size = features.size(0);
   if (batch_size != 1)
   {
     return 0;
   }
   // data height
-  int data_height = THFloatTensor_size(features, 1);
+  int data_height = features.size(1);
   // data width
-  int data_width = THFloatTensor_size(features, 2);
+  int data_width = features.size(2);
   // Number of channels
-  int num_channels = THFloatTensor_size(features, 3);
+  int num_channels = features.size(3);
 
   // Set all element of the output tensor to -inf.
-  THFloatStorage_fill(THFloatTensor_storage(output), -1);
+
+  output.fill_(-1);
 
   // For each ROI R = [batch_index x1 y1 x2 y2]: max pool over R
   int index_roi = 0;
@@ -106,4 +111,6 @@ int roi_pooling_forward(int pooled_height, int pooled_width, float spatial_scale
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("roi_pooling_forward", &roi_pooling_forward, "roi pooling forward");
+  m.def("roi_pooling_forward_cuda", &roi_pooling_forward_cuda, "roi pooling forward by cuda");
+  m.def("roi_pooling_backward_cuda", &roi_pooling_backward_cuda, "roi pooling backward by cuda");
 }
