@@ -35,8 +35,8 @@ class _RPN(nn.Module):
     self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
 
     # define anchor box offset prediction layer
-    self.nc_bbox_out = len(self.anchor_scales) * \
-        len(self.anchor_ratios) * 4  # 4(coords) * 9 (anchors)
+    # 4(coords) * 9 (anchors)
+    self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4
     self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0)
 
     # define proposal layer

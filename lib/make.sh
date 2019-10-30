@@ -23,6 +23,7 @@ echo "Compiling nms kernels by nvcc..."
 nvcc -c -o nms_cuda_kernel.cu.o nms_cuda_kernel.cu -x cu -Xcompiler -fPIC $CUDA_ARCH
 
 python3 build.py build_ext --inplace
+rm -rf build *.o
 
 # compile roi_pooling
 cd ../
@@ -31,14 +32,15 @@ echo "Compiling roi pooling kernels by nvcc..."
 nvcc -c -o roi_pooling.cu.o roi_pooling_kernel.cu \
 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
 python3 build.py build_ext --inplace
+rm -rf build *.o
 
 # compile roi_align
 cd ../
 cd roi_align/
 echo "Compiling roi align kernels by nvcc..."
-nvcc -c -o roi_align_kernel.cu.o roi_align_kernel.cu \
-	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
-python3 build.py build_ext --inplace
+
+./make.sh
+rm -rf build *.o
 
 # compile roi_crop
 cd ../
@@ -47,4 +49,6 @@ echo "Compiling roi crop kernels by nvcc..."
 nvcc -c -o roi_crop_cuda_kernel.cu.o roi_crop_cuda_kernel.cu \
 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
 python3 build.py build_ext --inplace
+rm -rf build *.o
+
 cd ../

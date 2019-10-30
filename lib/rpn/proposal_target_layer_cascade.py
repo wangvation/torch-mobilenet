@@ -141,8 +141,8 @@ class _ProposalTargetLayer(nn.Module):
     offset = torch.arange(0, batch_size) * gt_boxes.size(1)
     offset = offset.view(-1, 1).type_as(gt_assignment) + gt_assignment
 
-    print(gt_boxes.size())
-    print(offset.size())
+    # print(gt_boxes.size())
+    # print(offset.size())
     labels = (gt_boxes[:, :, 4]
               .contiguous()
               .view(-1)[offset.view(-1)]

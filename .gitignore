@@ -103,7 +103,8 @@ venv.bak/
 .mypy_cache/
 
 # project
-data/*/
+data/*
 *.pt
+*.o
 cocoapi/
 checkpoint/

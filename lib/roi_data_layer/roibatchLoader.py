@@ -12,7 +12,8 @@ import torch
 
 from ..utils.config import cfg
 from ..roi_data_layer.minibatch import get_minibatch
-from ..rpn.bbox_transform import bbox_transform_inv, clip_boxes
+from ..rpn.bbox_transform import bbox_transform_inv
+from ..rpn.bbox_transform import clip_boxes
 
 import numpy as np
 import random
