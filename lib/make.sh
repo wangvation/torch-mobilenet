@@ -20,35 +20,35 @@ CUDA_ARCH="-gencode arch=compute_30,code=sm_30 \
 # compile NMS
 cd nms/
 echo "Compiling nms kernels by nvcc..."
+rm -rf build *.o
 nvcc -c -o nms_cuda_kernel.cu.o nms_cuda_kernel.cu -x cu -Xcompiler -fPIC $CUDA_ARCH
 
 python3 build.py build_ext --inplace
-rm -rf build *.o
 
 # compile roi_pooling
 cd ../
 cd roi_pooling/
 echo "Compiling roi pooling kernels by nvcc..."
+rm -rf build *.o
 nvcc -c -o roi_pooling.cu.o roi_pooling_kernel.cu \
 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
 python3 build.py build_ext --inplace
-rm -rf build *.o
 
 # compile roi_align
 cd ../
 cd roi_align/
 echo "Compiling roi align kernels by nvcc..."
-
-./make.sh
 rm -rf build *.o
+nvcc -c -o roi_align_kernel.cu.o roi_align_kernel.cu -x cu -Xcompiler -fPIC $CUDA_ARCH
+./make.sh
 
 # compile roi_crop
 cd ../
 cd roi_crop/
+rm -rf build *.o
 echo "Compiling roi crop kernels by nvcc..."
 nvcc -c -o roi_crop_cuda_kernel.cu.o roi_crop_cuda_kernel.cu \
 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
 python3 build.py build_ext --inplace
-rm -rf build *.o
 
 cd ../
