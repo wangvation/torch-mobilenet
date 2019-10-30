@@ -35,30 +35,32 @@ class MobileFasterRCNN(_fasterRCNN):
                                        if k in self.mobile_net.state_dict()
                                        })
 
-    self.mobile_net.classifier = nn.Sequential(
-        *list(self.mobile_net.classifier._modules.values()))
+    self.classifier = nn.Sequential(
+        *list(self.mobile_net.classifier._modules.values())[:-2])
 
     self.RCNN_base = nn.Sequential(
         *list(self.mobile_net.features._modules.values()))
 
     # Fix the layers before conv3:
-    for layer in range(10):
-      for p in self.RCNN_base[layer].parameters():
-        p.requires_grad = False
+    # for layer in range(10):
+    #   for p in self.RCNN_base[layer].parameters():
+    #     p.requires_grad = False
 
-    self.RCNN_top = self.mobile_net.classifier
+    self.RCNN_top = self.classifier
 
     # not using the last maxpool layer
-    self.RCNN_cls_score = nn.Linear(4096, self.n_classes)
+    self.RCNN_cls_score = nn.Linear(self.mobile_net.last_out_channel,
+                                    self.n_classes)
 
     if self.class_agnostic:
-      self.RCNN_bbox_pred = nn.Linear(4096, 4)
+      self.RCNN_bbox_pred = nn.Linear(self.mobile_net.last_out_channel, 4)
     else:
-      self.RCNN_bbox_pred = nn.Linear(4096, 4 * self.n_classes)
+      self.RCNN_bbox_pred = nn.Linear(self.mobile_net.last_out_channel,
+                                      4 * self.n_classes)
 
   def _head_to_tail(self, pool5):
 
-    pool5_flat = pool5.view(pool5.size(0), -1)
-    fc7 = self.RCNN_top(pool5_flat)
-
-    return fc7
+    # pool5_flat = pool5.view(pool5.size(0), -1)
+    fc7 = self.RCNN_top(pool5)
+    fc7_flat = fc7.view(-1, fc7.size(1))
+    return fc7_flat

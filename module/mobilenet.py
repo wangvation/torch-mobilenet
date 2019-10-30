@@ -156,9 +156,9 @@ class MobileNetV1(nn.Module):
         DepthSepConv(512, 1024, stride=2, multiplier=multiplier),
         DepthSepConv(1024, 1024, stride=1, multiplier=multiplier))
 
-    self._avgpool = AvgPool2d(kernel_size=resolution // 32, stride=1)
-
     self.classifier = nn.Sequential(
+        # 7 x 7 x 1024
+        AvgPool2d(kernel_size=resolution // 32),
         # 1 x 1 x 1024
         Conv2d(self.last_out_channel, num_classes, kernel_size=1),
         # 1 x 1 x num_classes
@@ -168,7 +168,6 @@ class MobileNetV1(nn.Module):
   def forward(self, x):
 
     x = self.features(x)
-    x = self._avgpool(x)
     x = self.classifier(x)
     x = x.view(-1, self.num_classes)
     return x
@@ -303,11 +302,9 @@ class MobileNetV2(nn.Module):
                          kernel_size=last_ksize,
                          groups=last_out_channel)
 
-    # Global Average Pooling
-    # 7 x 7 x 1280
-    self._avgpool = AvgPool2d(kernel_size=last_ksize)
-
     self.classifier = nn.Sequential(
+        # 7 x 7 x 1280
+        AvgPool2d(kernel_size=last_ksize),
         # 1 x 1 x 1280
         Conv2d(last_out_channel, num_classes, kernel_size=1),
         # 1 x 1 x num_classes
@@ -316,7 +313,6 @@ class MobileNetV2(nn.Module):
 
   def forward(self, x):
     x = self.features(x)
-    x = self._avgpool(x)
     x = self.classifier(x)
     x = x.view(-1, self.num_classes)
     return x
