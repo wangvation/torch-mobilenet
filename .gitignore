@@ -106,6 +106,7 @@ venv.bak/
 data/*
 *.pt
 *.o
+training_log.md
 cocoapi/
 checkpoint/
 models/
