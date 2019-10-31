@@ -5,9 +5,8 @@
 # Written by Ross Girshick
 # --------------------------------------------------------
 import torch
-from ..utils.config import cfg
 if torch.cuda.is_available():
-  from ..nms.nms_gpu import nms_gpu
+  from ._nms import nms_gpu
 from ..nms.nms_cpu import nms_cpu
 
 
@@ -18,7 +17,5 @@ def nms(dets, thresh, force_cpu=False):
   # ---numpy version---
   # original: return gpu_nms(dets, thresh, device_id=cfg.GPU_ID)
   # ---pytorch version---
-  if not force_cpu:
-    torch.Tensor
 
   return nms_cpu(dets, thresh) if force_cpu else nms_gpu(dets, thresh)

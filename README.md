@@ -1,6 +1,7 @@
 # torch-mobilenet
 
 MobileNetV1 (Pytorch implementation) -- see https://arxiv.org/abs/1704.04861 for the paper.
+
 MobileNetV2 (Pytorch implementation) -- see https://arxiv.org/abs/1801.04381 for the paper.
 
 
@@ -14,8 +15,13 @@ MobileNetV2 (Pytorch implementation) -- see https://arxiv.org/abs/1801.04381 for
 python3 script/json_formatter.py -i data/coco/annotations/
 ```
 
-```bash
 
+
+## library
+
+1. build library
+
+```bash
 cd lib/
 ./make.sh
 ```

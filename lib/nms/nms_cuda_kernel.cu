@@ -38,30 +38,32 @@ __device__ inline float devIoU(float const * const a, float const * const b) {
   return interS / (Sa + Sb - interS);
 }
 
-__global__ void nms_kernel(int n_boxes, float nms_overlap_thresh,
-                           float *dev_boxes, unsigned long long *dev_mask) {
+__global__ void nms_kernel(int n_boxes,
+                           float nms_overlap_thresh,
+                           float *dev_boxes,
+                           unsigned long long *dev_mask) {
   const int row_start = blockIdx.y;
   const int col_start = blockIdx.x;
 
   // if (row_start > col_start) return;
 
   const int row_size =
-        min(n_boxes - row_start * threadsPerBlock, threadsPerBlock);
+    min(n_boxes - row_start * threadsPerBlock, threadsPerBlock);
   const int col_size =
-        min(n_boxes - col_start * threadsPerBlock, threadsPerBlock);
+    min(n_boxes - col_start * threadsPerBlock, threadsPerBlock);
 
   __shared__ float block_boxes[threadsPerBlock * 5];
   if (threadIdx.x < col_size) {
     block_boxes[threadIdx.x * 5 + 0] =
-        dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 0];
+      dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 0];
     block_boxes[threadIdx.x * 5 + 1] =
-        dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 1];
+      dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 1];
     block_boxes[threadIdx.x * 5 + 2] =
-        dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 2];
+      dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 2];
     block_boxes[threadIdx.x * 5 + 3] =
-        dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 3];
+      dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 3];
     block_boxes[threadIdx.x * 5 + 4] =
-        dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 4];
+      dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 4];
   }
   __syncthreads();
 
@@ -84,8 +86,12 @@ __global__ void nms_kernel(int n_boxes, float nms_overlap_thresh,
   }
 }
 
-void nms_cuda_compute(int* keep_out, int *num_out, float* boxes_host, int boxes_num,
-          int boxes_dim, float nms_overlap_thresh) {
+void nms_cuda_compute(int* keep_out,
+                      int *num_out,
+                      float* boxes_host,
+                      int boxes_num,
+                      int boxes_dim,
+                      float nms_overlap_thresh) {
 
   float* boxes_dev = NULL;
   unsigned long long* mask_dev = NULL;
@@ -107,12 +113,12 @@ void nms_cuda_compute(int* keep_out, int *num_out, float* boxes_host, int boxes_
   dim3 threads(threadsPerBlock);
 
   // printf("i am at line %d\n", boxes_num);
-  // printf("i am at line %d\n", boxes_dim);  
+  // printf("i am at line %d\n", boxes_dim);
 
-  nms_kernel<<<blocks, threads>>>(boxes_num,
-                                  nms_overlap_thresh,
-                                  boxes_dev,
-                                  mask_dev);
+  nms_kernel <<< blocks, threads>>>(boxes_num,
+                                    nms_overlap_thresh,
+                                    boxes_dev,
+                                    mask_dev);
 
   std::vector<unsigned long long> mask_host(boxes_num * col_blocks);
   CUDA_CHECK(cudaMemcpy(&mask_host[0],
@@ -144,18 +150,18 @@ void nms_cuda_compute(int* keep_out, int *num_out, float* boxes_host, int boxes_
   }
 
   // copy keep_out_cpu to keep_out on gpu
-  CUDA_WARN(cudaMemcpy(keep_out, keep_out_cpu, boxes_num * sizeof(int),cudaMemcpyHostToDevice));  
+  CUDA_WARN(cudaMemcpy(keep_out, keep_out_cpu, boxes_num * sizeof(int), cudaMemcpyHostToDevice));
 
   // *num_out = num_to_keep;
 
   // original: *num_out = num_to_keep;
   // copy num_to_keep to num_out on gpu
 
-  CUDA_WARN(cudaMemcpy(num_out, &num_to_keep, 1 * sizeof(int),cudaMemcpyHostToDevice));  
+  CUDA_WARN(cudaMemcpy(num_out, &num_to_keep, 1 * sizeof(int), cudaMemcpyHostToDevice));
 
   // release cuda memory
   CUDA_CHECK(cudaFree(boxes_dev));
   CUDA_CHECK(cudaFree(mask_dev));
   // release cpu memory
-  delete []keep_out_cpu;
+  delete [] keep_out_cpu;
 }

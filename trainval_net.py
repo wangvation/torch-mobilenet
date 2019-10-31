@@ -29,11 +29,7 @@ from lib.roi_data_layer.roibatchLoader import roibatchLoader
 from lib.utils.config import cfg
 from lib.utils.config import cfg_from_file
 from lib.utils.config import cfg_from_list
-# from lib.utils.config import get_output_dir
 
-# from lib.utils.net_utils import weights_normal_init
-# from lib.utils.net_utils import save_net
-# from lib.utils.net_utils import load_net
 
 from lib.utils.net_utils import adjust_learning_rate
 from lib.utils.net_utils import save_checkpoint
@@ -394,8 +390,6 @@ if __name__ == '__main__':
       # backward
       optimizer.zero_grad()
       loss.backward()
-      if args.net == "mobilenet":
-        clip_gradient(fasterRCNN, 10.)
       optimizer.step()
 
       if step % args.disp_interval == 0:
