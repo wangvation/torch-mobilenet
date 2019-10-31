@@ -17,28 +17,30 @@ import time
 import cv2
 import torch
 from torch.autograd import Variable
-import torch.nn as nn
-import torch.optim as optim
+# import torch.nn as nn
+# import torch.optim as optim
 
-import torchvision.transforms as transforms
-import torchvision.datasets as dset
+# import torchvision.transforms as transforms
+# import torchvision.datasets as dset
 from scipy.misc import imread
 from lib.roi_data_layer.roidb import combined_roidb
-from lib.roi_data_layer.roibatchLoader import roibatchLoader
+# from lib.roi_data_layer.roibatchLoader import roibatchLoader
 from lib.utils.config import cfg
 from lib.utils.config import cfg_from_file
 from lib.utils.config import cfg_from_list
-from lib.utils.config import get_output_dir
+# from lib.utils.config import get_output_dir
 from lib.rpn.bbox_transform import clip_boxes
 from lib.nms.nms_wrapper import nms
 from lib.rpn.bbox_transform import bbox_transform_inv
-from lib.utils.net_utils import save_net
-from lib.utils.net_utils import load_net
+# from lib.utils.net_utils import save_net
+# from lib.utils.net_utils import load_net
 from lib.utils.net_utils import vis_detections
 from lib.utils.blob import im_list_to_blob
-from lib.faster_rcnn.vgg16 import vgg16
-from lib.faster_rcnn.resnet import resnet
-import pdb
+from module.mobile_faster_rcnn import MobileFasterRCNN
+from module.mobilenet import MobileNetV2
+from module.mobilenet import MobileNetV1
+
+# import pdb
 
 try:
   xrange          # Python 2
@@ -157,6 +159,32 @@ if __name__ == '__main__':
   if args.set_cfgs is not None:
     cfg_from_list(args.set_cfgs)
 
+  if args.dataset == "pascal_voc":
+    args.imdb_name = "voc_2007_trainval"
+    args.imdbval_name = "voc_2007_test"
+    args.set_cfgs = ['ANCHOR_SCALES',
+                     '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "pascal_voc_0712":
+    args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
+    args.imdbval_name = "voc_2007_test"
+    args.set_cfgs = ['ANCHOR_SCALES',
+                     '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "coco":
+    args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
+    args.imdbval_name = "coco_2014_minival"
+    args.set_cfgs = ['ANCHOR_SCALES',
+                     '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "imagenet":
+    args.imdb_name = "imagenet_train"
+    args.imdbval_name = "imagenet_val"
+    args.set_cfgs = ['ANCHOR_SCALES',
+                     '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "vg":
+    args.imdb_name = "vg_150-50-50_minitrain"
+    args.imdbval_name = "vg_150-50-50_minival"
+    args.set_cfgs = ['ANCHOR_SCALES',
+                     '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+
   cfg.USE_GPU_NMS = args.cuda
 
   print('Using config:')
@@ -171,7 +199,9 @@ if __name__ == '__main__':
     raise Exception(
         'There is no input directory for loading network from ' + input_dir)
   load_name = os.path.join(input_dir,
-                           'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+                           'faster_rcnn_{}_{}_{}.pth'.format(args.checksession,
+                                                             args.checkepoch,
+                                                             args.checkpoint))
 
   pascal_classes = np.asarray(['__background__',
                                'aeroplane', 'bicycle', 'bird', 'boat',
@@ -180,23 +210,44 @@ if __name__ == '__main__':
                                'motorbike', 'person', 'pottedplant',
                                'sheep', 'sofa', 'train', 'tvmonitor'])
 
+  imdb, roidb, ratio_list, ratio_index = combined_roidb(
+      args.imdbval_name, False)
+  imdb.competition_mode(on=True)
+
   # initilize the network here.
-  if args.net == 'vgg16':
-    fasterRCNN = vgg16(pascal_classes, pretrained=False,
-                       class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    fasterRCNN = resnet(pascal_classes, 101, pretrained=False,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res50':
-    fasterRCNN = resnet(pascal_classes, 50, pretrained=False,
-                        class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    fasterRCNN = resnet(pascal_classes, 152, pretrained=False,
-                        class_agnostic=args.class_agnostic)
+  if args.net == 'mobilenetv1_224_100':
+    dout_base_model = 1024
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv1_224_075':
+    dout_base_model = 1024
+    mobile_net = MobileNetV1(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
+  elif args.net == 'mobilenetv2_224_100':
+    dout_base_model = 1280
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=1)
+
+  elif args.net == 'mobilenetv2_224_075':
+    dout_base_model = 1280
+    mobile_net = MobileNetV2(resolution=224,
+                             num_classes=imdb.num_classes,
+                             multiplier=0.75)
+
   else:
     print("network is not defined")
     pdb.set_trace()
 
+  fasterRCNN = MobileFasterRCNN(mobile_net=mobile_net,
+                                classes=imdb.classes,
+                                dout_base_model=dout_base_model,
+                                num_classes=imdb.num_classes,
+                                class_agnostic=args.class_agnostic)
   fasterRCNN.create_architecture()
 
   print("load checkpoint %s" % (load_name))
@@ -315,8 +366,8 @@ if __name__ == '__main__':
         # Optionally normalize targets by a precomputed mean and stdev
         if args.class_agnostic:
           if args.cuda > 0:
-            box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+            box_deltas = (box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda()
+                          + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda())
           else:
             box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS) \
                 + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS)

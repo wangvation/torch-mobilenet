@@ -23,8 +23,8 @@ from torch.autograd import Variable
 # import torch.nn as nn
 # import torch.optim as optim
 import pickle
-from roi_data_layer.roidb import combined_roidb
-from roi_data_layer.roibatchLoader import roibatchLoader
+from lib.roi_data_layer.roidb import combined_roidb
+from lib.roi_data_layer.roibatchLoader import roibatchLoader
 from lib.utils.config import cfg
 from lib.utils.config import cfg_from_file
 from lib.utils.config import cfg_from_list
@@ -50,21 +50,27 @@ def parse_args():
   """
   Parse input arguments
   """
-  parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
+  parser = argparse.ArgumentParser(description='Test a Fast R-CNN network')
   parser.add_argument('--dataset', dest='dataset',
                       help='training dataset',
                       default='pascal_voc', type=str)
   parser.add_argument('--cfg', dest='cfg_file',
                       help='optional config file',
                       default='config/vgg16.yml', type=str)
+
   parser.add_argument('--net', dest='net',
-                      help='vgg16, res50, res101, res152',
-                      default='res101', type=str)
+                      choices=['mobilenetv1_224_100',
+                               'mobilenetv1_224_075',
+                               'mobilenetv2_224_100',
+                               'mobilenetv2_224_075'],
+                      help='mobilenet type',
+                      default='mobilenetv1_224_100', type=str)
+
   parser.add_argument('--set', dest='set_cfgs',
                       help='set config keys', default=None,
                       nargs=argparse.REMAINDER)
   parser.add_argument('--load_dir', dest='load_dir',
-                      help='directory to load models', default="models",
+                      help='directory to load models', default="checkpoint",
                       type=str)
   parser.add_argument('--cuda', dest='cuda',
                       help='whether use CUDA',
@@ -169,21 +175,25 @@ if __name__ == '__main__':
 
   # initilize the network here.
   if args.net == 'mobilenetv1_224_100':
+    dout_base_model = 1024
     mobile_net = MobileNetV1(resolution=224,
                              num_classes=imdb.num_classes,
                              multiplier=1)
 
   elif args.net == 'mobilenetv1_224_075':
+    dout_base_model = 1024
     mobile_net = MobileNetV1(resolution=224,
                              num_classes=imdb.num_classes,
                              multiplier=0.75)
 
   elif args.net == 'mobilenetv2_224_100':
+    dout_base_model = 1280
     mobile_net = MobileNetV2(resolution=224,
                              num_classes=imdb.num_classes,
                              multiplier=1)
 
   elif args.net == 'mobilenetv2_224_075':
+    dout_base_model = 1280
     mobile_net = MobileNetV2(resolution=224,
                              num_classes=imdb.num_classes,
                              multiplier=0.75)
@@ -194,6 +204,7 @@ if __name__ == '__main__':
 
   fasterRCNN = MobileFasterRCNN(mobile_net=mobile_net,
                                 classes=imdb.classes,
+                                dout_base_model=dout_base_model,
                                 num_classes=imdb.num_classes,
                                 class_agnostic=args.class_agnostic)
   fasterRCNN.create_architecture()
@@ -240,7 +251,7 @@ if __name__ == '__main__':
   else:
     thresh = 0.0
 
-  save_name = 'faster_rcnn_10'
+  save_name = 'mobile_faster_rcnn_10'
   num_images = len(imdb.image_index)
   all_boxes = [[[] for _ in range(num_images)]
                for _ in range(imdb.num_classes)]
@@ -262,10 +273,16 @@ if __name__ == '__main__':
   for i in range(num_images):
 
     data = next(data_iter)
-    im_data.data.resize_(data[0].size()).copy_(data[0])
-    im_info.data.resize_(data[1].size()).copy_(data[1])
-    gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-    num_boxes.data.resize_(data[3].size()).copy_(data[3])
+    im_data.resize_(data[0].size())
+    im_info.resize_(data[1].size())
+    gt_boxes.resize_(data[2].size())
+    num_boxes.resize_(data[3].size())
+
+    with torch.no_grad():
+      im_data.data.copy_(data[0])
+      im_info.data.copy_(data[1])
+      gt_boxes.data.copy_(data[2])
+      num_boxes.data.copy_(data[3])
 
     det_tic = time.time()
     rois, cls_prob, bbox_pred, \

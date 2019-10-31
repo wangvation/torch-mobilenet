@@ -108,3 +108,5 @@ data/*
 *.o
 cocoapi/
 checkpoint/
+models/
+output/

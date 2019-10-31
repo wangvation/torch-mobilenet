@@ -69,7 +69,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="models",
+                      help='directory to save models', default="checkpoint",
                       type=str)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of workers to load data',
@@ -433,10 +433,10 @@ if __name__ == '__main__':
         loss_temp = 0
         start = time.time()
 
-    save_name = os.path.join(output_dir,
-                             'faster_rcnn_{}_{}_{}.pth'.format(args.session,
-                                                               epoch,
-                                                               step))
+    save_name = os.path.join(
+        output_dir, 'mobile_faster_rcnn_{}_{}_{}.pth'.format(args.session,
+                                                             epoch,
+                                                             step))
     save_checkpoint({
         'session': args.session,
         'epoch': epoch + 1,
