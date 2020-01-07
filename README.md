@@ -44,10 +44,8 @@ python3 train.py train -m checkpoint -w checkpoint/MobileNetV2_224_epoch:0048.pt
                     --lr 0.001 --lr_decay_step 5 \
                     --use_tfb \
                     --cuda
-                    ```
-
-
-## testing
+```
+##  testing
 
 1. testing mobilenet on classifier dataset.
 
@@ -63,4 +61,4 @@ python3 train.py train -m checkpoint -w checkpoint/MobileNetV2_224_epoch:0048.pt
                     --checkepoch 1\
                     --checkpoint 234531\
                     --cuda
-                    ```
+```
